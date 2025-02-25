@@ -509,8 +509,15 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 	if (ukee_overclock) {
 		if (cpu == 0) {
 			c->table[i++].frequency = 1920000;
+			c->table[i++].frequency = 2016000;
+			c->table[i++].frequency = 2445600;
 		} else if (cpu == 4) {
 			c->table[i++].frequency = 2572800;
+			c->table[i++].frequency = 2649600;
+			c->table[i++].frequency = 2745600;
+			c->table[i++].frequency = 2865600;
+		} else if (cpu == 7) {
+			c->table[i++].frequency = 3187200;
 		}
 	}
 #endif
