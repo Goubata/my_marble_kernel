@@ -58,5 +58,5 @@ jobs:
         with:
           name: kernel-build-Main
           path: |
-            out/arch/arm64/boot/Image.gz-dtb
-            out/drivers/cpufreq/qcom-cpufreq-hw.ko
+            kernel/out/arch/arm64/boot/Image.gz-dtb
+            kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
