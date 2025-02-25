@@ -42,8 +42,7 @@
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
-static bool ukee_overclock = false;
-module_param(ukee_overclock, bool, S_IRUGO);
+static bool ukee_overclock = true;
 #endif
 
 enum {
@@ -516,7 +515,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 			c->table[i++].frequency = 2649600;
 			c->table[i++].frequency = 2745600;
 		} else if (cpu == 7) {
-			c->table[i++].frequency = 2995200;
+			c->table[i++].frequency = 3187200;
 		}
 	}
 #endif
