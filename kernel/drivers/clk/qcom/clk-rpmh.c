@@ -14,18 +14,19 @@
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 #include <soc/qcom/tcs.h>
-#include <linux/init.h>
-#include <linux/sysfs.h>
-#include <linux/kobject.h>
-#include <linux/regulator/driver.h>
-#include <linux/regulator/machine.h>
+
 #include <dt-bindings/clock/qcom,rpmh.h>
 
-struct clk_rpmh_desc {
-	struct clk_hw **clks;
-	size_t num_clks;
-};
+#define CLK_RPMH_ARC_EN_OFFSET		0
+#define CLK_RPMH_VRM_EN_OFFSET		4
 
+/**
+ * struct bcm_db - Auxiliary data pertaining to each Bus Clock Manager(BCM)
+ * @unit: divisor used to convert Hz value to an RPMh msg
+ * @width: multiplier used to convert Hz value to an RPMh msg
+ * @vcd: virtual clock domain that this bcm belongs to
+ * @reserved: reserved to pad the struct
+ */
 struct bcm_db {
 	__le32 unit;
 	__le16 width;
@@ -33,6 +34,21 @@ struct bcm_db {
 	u8 reserved;
 };
 
+/**
+ * struct clk_rpmh - individual rpmh clock data structure
+ * @hw:			handle between common and hardware-specific interfaces
+ * @res_name:		resource name for the rpmh clock
+ * @div:		clock divider to compute the clock rate
+ * @res_addr:		base address of the rpmh resource within the RPMh
+ * @res_on_val:		rpmh clock enable value
+ * @state:		rpmh clock requested state
+ * @aggr_state:		rpmh clock aggregated state
+ * @last_sent_aggr_state: rpmh clock last aggr state sent to RPMh
+ * @valid_state_mask:	mask to determine the state of the rpmh clock
+ * @unit:		divisor to convert rate to rpmh msg in magnitudes of Khz
+ * @dev:		device to which it is attached
+ * @peer:		pointer to the clock rpmh sibling
+ */
 struct clk_rpmh {
 	struct clk_hw hw;
 	const char *res_name;
@@ -49,136 +65,55 @@ struct clk_rpmh {
 	struct clk_rpmh *peer;
 };
 
-static inline struct clk_rpmh *to_clk_rpmh(struct clk_hw *_hw)
-{
-    return container_of(_hw, struct clk_rpmh, hw);
-}
+struct clk_rpmh_desc {
+	struct clk_hw **clks;
+	size_t num_clks;
+};
 
-static int vdd_cpu_max_mv = 1100;  
+static DEFINE_MUTEX(rpmh_clk_lock);
 
-static ssize_t vdd_cpu_max_show(struct kobject *kobj,
-                                struct kobj_attribute *attr, char *buf)
-{
-    return sprintf(buf, "%d\n", vdd_cpu_max_mv);
-}
-
-static ssize_t vdd_cpu_max_store(struct kobject *kobj,
-                                 struct kobj_attribute *attr,
-                                 const char *buf, size_t count)
-{
-    int val;
-    if (kstrtoint(buf, 10, &val) < 0 || val < 600 || val > 1200) 
-        return -EINVAL;
-
-    vdd_cpu_max_mv = val;
-    return count;
-}
-
-static struct kobj_attribute vdd_cpu_max_attribute =
-    __ATTR(vdd_cpu_max, 0664, vdd_cpu_max_show, vdd_cpu_max_store);
-
-static int __init vdd_cpu_max_init(void)
-{
-    struct kobject *kobj = kobject_create_and_add("clk_rpmh", kernel_kobj);
-    if (!kobj)
-        return -ENOMEM;
-
-    if (sysfs_create_file(kobj, &vdd_cpu_max_attribute.attr))
-        kobject_put(kobj);
-
-    return 0;
-}
-
-static struct clk_hw *of_clk_rpmh_hw_get(struct of_phandle_args *clkspec,
-					 void *data)
-{
-	struct clk_rpmh_desc *rpmh = data;
-	unsigned int idx = clkspec->args[0];
-	struct clk_rpmh *c;
-
-	if (idx >= rpmh->num_clks) {
-		pr_err("%s: invalid index %u\n", __func__, idx);
-		return ERR_PTR(-EINVAL);
+#define __DEFINE_CLK_RPMH(_platform, _name, _name_active, _res_name,	\
+			  _res_en_offset, _res_on, _div, _optional)	\
+	static struct clk_rpmh _platform##_##_name_active;		\
+	static struct clk_rpmh _platform##_##_name = {			\
+		.res_name = _res_name,					\
+		.res_addr = _res_en_offset,				\
+		.res_on_val = _res_on,					\
+		.div = _div,						\
+		.optional = _optional,					\
+		.peer = &_platform##_##_name_active,			\
+		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
+				      BIT(RPMH_ACTIVE_ONLY_STATE) |	\
+				      BIT(RPMH_SLEEP_STATE)),		\
+		.hw.init = &(struct clk_init_data){			\
+			.ops = &clk_rpmh_ops,				\
+			.name = #_name,					\
+			.parent_data =  &(const struct clk_parent_data){ \
+					.fw_name = "xo",		\
+					.name = "xo_board",		\
+			},						\
+			.num_parents = 1,				\
+		},							\
+	};								\
+	static struct clk_rpmh _platform##_##_name_active = {		\
+		.res_name = _res_name,					\
+		.res_addr = _res_en_offset,				\
+		.res_on_val = _res_on,					\
+		.div = _div,						\
+		.optional = _optional,					\
+		.peer = &_platform##_##_name,				\
+		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
+					BIT(RPMH_ACTIVE_ONLY_STATE)),	\
+		.hw.init = &(struct clk_init_data){			\
+			.ops = &clk_rpmh_ops,				\
+			.name = #_name_active,				\
+			.parent_data =  &(const struct clk_parent_data){ \
+					.fw_name = "xo",		\
+					.name = "xo_board",		\
+			},						\
+			.num_parents = 1,				\
+		},							\
 	}
-
-	if (!rpmh->clks[idx])
-		return ERR_PTR(-ENOENT);
-
-	c = to_clk_rpmh(rpmh->clks[idx]);
-	if (!c->res_addr)
-		return ERR_PTR(-ENODEV);
-
-	return rpmh->clks[idx];
-}
-
-static int clk_rpmh_probe(struct platform_device *pdev)
-{
-	struct clk_hw **hw_clks;
-	struct clk_rpmh *rpmh_clk;
-	const struct clk_rpmh_desc *desc;
-	int ret, i;
-
-	desc = of_device_get_match_data(&pdev->dev);
-	if (!desc)
-		return -ENODEV;
-
-	hw_clks = desc->clks;
-
-	for (i = 0; i < desc->num_clks; i++) {
-		const char *name;
-		u32 res_addr;
-		size_t aux_data_len;
-		const struct bcm_db *data;
-
-		if (!hw_clks[i])
-			continue;
-
-		name = hw_clks[i]->init->name;
-
-		rpmh_clk = to_clk_rpmh(hw_clks[i]);
-		res_addr = cmd_db_read_addr(rpmh_clk->res_name);
-		if (!res_addr) {
-			if (rpmh_clk->optional)
-				continue;
-			WARN(1, "clk-rpmh: Missing RPMh resource address for %s\n",
-				rpmh_clk->res_name);
-			return -ENODEV;
-		}
-
-		data = cmd_db_read_aux_data(rpmh_clk->res_name, &aux_data_len);
-		if (IS_ERR(data)) {
-			ret = PTR_ERR(data);
-			WARN(1, "clk-rpmh: error reading RPMh aux data for %s (%d)\n",
-				rpmh_clk->res_name, ret);
-			return ret;
-		}
-
-		/* Convert unit from Khz to Hz */
-		if (aux_data_len == sizeof(*data))
-			rpmh_clk->unit = le32_to_cpu(data->unit) * 1000ULL;
-
-		rpmh_clk->res_addr += res_addr;
-		rpmh_clk->dev = &pdev->dev;
-
-		ret = devm_clk_hw_register(&pdev->dev, hw_clks[i]);
-		if (ret) {
-			dev_err(&pdev->dev, "failed to register %s\n", name);
-			return ret;
-		}
-	}
-
-	/* typecast to silence compiler warning */
-	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_rpmh_hw_get,
-					  (void *)desc);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to add clock provider\n");
-		return ret;
-	}
-
-	dev_dbg(&pdev->dev, "Registered RPMh clocks\n");
-
-	return 0;
-}
 
 #define DEFINE_CLK_RPMH_ARC(_platform, _name, _name_active, _res_name,	\
 			    _res_on, _div)				\
@@ -208,6 +143,218 @@ static int clk_rpmh_probe(struct platform_device *pdev)
 		},							\
 	}
 
+static inline struct clk_rpmh *to_clk_rpmh(struct clk_hw *_hw)
+{
+	return container_of(_hw, struct clk_rpmh, hw);
+}
+
+static inline bool has_state_changed(struct clk_rpmh *c, u32 state)
+{
+	return (c->last_sent_aggr_state & BIT(state))
+		!= (c->aggr_state & BIT(state));
+}
+
+static int clk_rpmh_send(struct clk_rpmh *c, enum rpmh_state state,
+			 struct tcs_cmd *cmd, bool wait)
+{
+	if (wait)
+		return rpmh_write(c->dev, state, cmd, 1);
+
+	return rpmh_write_async(c->dev, state, cmd, 1);
+}
+
+static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
+{
+	struct tcs_cmd cmd = { 0 };
+	u32 cmd_state, on_val;
+	enum rpmh_state state = RPMH_SLEEP_STATE;
+	int ret;
+	bool wait;
+
+	cmd.addr = c->res_addr;
+	cmd_state = c->aggr_state;
+	on_val = c->res_on_val;
+
+	for (; state <= RPMH_ACTIVE_ONLY_STATE; state++) {
+		if (has_state_changed(c, state)) {
+			if (cmd_state & BIT(state))
+				cmd.data = on_val;
+
+			wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
+			ret = clk_rpmh_send(c, state, &cmd, wait);
+			if (ret) {
+				dev_err(c->dev, "set %s state of %s failed: (%d)\n",
+					!state ? "sleep" :
+					state == RPMH_WAKE_ONLY_STATE	?
+					"wake" : "active", c->res_name, ret);
+				return ret;
+			}
+		}
+	}
+
+	c->last_sent_aggr_state = c->aggr_state;
+	c->peer->last_sent_aggr_state =  c->last_sent_aggr_state;
+
+	return 0;
+}
+
+/*
+ * Update state and aggregate state values based on enable value.
+ */
+static int clk_rpmh_aggregate_state_send_command(struct clk_rpmh *c,
+						bool enable)
+{
+	int ret;
+
+	/* Nothing required to be done if already off or on */
+	if (enable == c->state)
+		return 0;
+
+	c->state = enable ? c->valid_state_mask : 0;
+	c->aggr_state = c->state | c->peer->state;
+	c->peer->aggr_state = c->aggr_state;
+
+	ret = clk_rpmh_send_aggregate_command(c);
+	if (!ret)
+		return 0;
+
+	if (ret && enable)
+		c->state = 0;
+	else if (ret)
+		c->state = c->valid_state_mask;
+
+	WARN(1, "clk: %s failed to %s\n", c->res_name,
+	     enable ? "enable" : "disable");
+	return ret;
+}
+
+static int clk_rpmh_prepare(struct clk_hw *hw)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+	int ret = 0;
+
+	mutex_lock(&rpmh_clk_lock);
+	ret = clk_rpmh_aggregate_state_send_command(c, true);
+	mutex_unlock(&rpmh_clk_lock);
+
+	return ret;
+}
+
+static void clk_rpmh_unprepare(struct clk_hw *hw)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	mutex_lock(&rpmh_clk_lock);
+	clk_rpmh_aggregate_state_send_command(c, false);
+	mutex_unlock(&rpmh_clk_lock);
+};
+
+static unsigned long clk_rpmh_recalc_rate(struct clk_hw *hw,
+					unsigned long prate)
+{
+	struct clk_rpmh *r = to_clk_rpmh(hw);
+
+	/*
+	 * RPMh clocks have a fixed rate. Return static rate.
+	 */
+	return prate / r->div;
+}
+
+static const struct clk_ops clk_rpmh_ops = {
+	.prepare	= clk_rpmh_prepare,
+	.unprepare	= clk_rpmh_unprepare,
+	.recalc_rate	= clk_rpmh_recalc_rate,
+};
+
+static int clk_rpmh_bcm_send_cmd(struct clk_rpmh *c, bool enable)
+{
+	struct tcs_cmd cmd = { 0 };
+	u32 cmd_state;
+	int ret = 0;
+
+	mutex_lock(&rpmh_clk_lock);
+	if (enable) {
+		cmd_state = 1;
+		if (c->aggr_state)
+			cmd_state = c->aggr_state;
+	} else {
+		cmd_state = 0;
+	}
+
+	if (cmd_state > BCM_TCS_CMD_VOTE_MASK)
+		cmd_state = BCM_TCS_CMD_VOTE_MASK;
+
+	if (c->last_sent_aggr_state != cmd_state) {
+		cmd.addr = c->res_addr;
+		cmd.data = BCM_TCS_CMD(1, enable, 0, cmd_state);
+
+		ret = clk_rpmh_send(c, RPMH_ACTIVE_ONLY_STATE, &cmd, enable);
+		if (ret) {
+			dev_err(c->dev, "set active state of %s failed: (%d)\n",
+				c->res_name, ret);
+		} else {
+			c->last_sent_aggr_state = cmd_state;
+		}
+	}
+
+	mutex_unlock(&rpmh_clk_lock);
+
+	return ret;
+}
+
+static int clk_rpmh_bcm_prepare(struct clk_hw *hw)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	return clk_rpmh_bcm_send_cmd(c, true);
+}
+
+static void clk_rpmh_bcm_unprepare(struct clk_hw *hw)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	clk_rpmh_bcm_send_cmd(c, false);
+}
+
+static int clk_rpmh_bcm_set_rate(struct clk_hw *hw, unsigned long rate,
+				 unsigned long parent_rate)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	c->aggr_state = rate / c->unit;
+	/*
+	 * Since any non-zero value sent to hw would result in enabling the
+	 * clock, only send the value if the clock has already been prepared.
+	 */
+	if (clk_hw_is_prepared(hw))
+		clk_rpmh_bcm_send_cmd(c, true);
+
+	return 0;
+}
+
+static long clk_rpmh_round_rate(struct clk_hw *hw, unsigned long rate,
+				unsigned long *parent_rate)
+{
+	return rate;
+}
+
+static unsigned long clk_rpmh_bcm_recalc_rate(struct clk_hw *hw,
+					unsigned long prate)
+{
+	struct clk_rpmh *c = to_clk_rpmh(hw);
+
+	return c->aggr_state * c->unit;
+}
+
+static const struct clk_ops clk_rpmh_bcm_ops = {
+	.prepare	= clk_rpmh_bcm_prepare,
+	.unprepare	= clk_rpmh_bcm_unprepare,
+	.set_rate	= clk_rpmh_bcm_set_rate,
+	.round_rate	= clk_rpmh_round_rate,
+	.recalc_rate	= clk_rpmh_bcm_recalc_rate,
+};
+
+/* Resource name must match resource id present in cmd-db */
 DEFINE_CLK_RPMH_ARC(sdm845, bi_tcxo, bi_tcxo_ao, "xo.lvl", 0x3, 2);
 DEFINE_CLK_RPMH_VRM(sdm845, ln_bb_clk2, ln_bb_clk2_ao, "lnbclka2", 2);
 DEFINE_CLK_RPMH_VRM(sdm845, ln_bb_clk3, ln_bb_clk3_ao, "lnbclka3", 2);
@@ -558,23 +705,113 @@ static const struct clk_rpmh_desc clk_rpmh_ravelin = {
 	.num_clks = ARRAY_SIZE(ravelin_rpmh_clocks),
 };
 
+static struct clk_hw *of_clk_rpmh_hw_get(struct of_phandle_args *clkspec,
+					 void *data)
+{
+	struct clk_rpmh_desc *rpmh = data;
+	unsigned int idx = clkspec->args[0];
+	struct clk_rpmh *c;
+
+	if (idx >= rpmh->num_clks) {
+		pr_err("%s: invalid index %u\n", __func__, idx);
+		return ERR_PTR(-EINVAL);
+	}
+
+	if (!rpmh->clks[idx])
+		return ERR_PTR(-ENOENT);
+
+	c = to_clk_rpmh(rpmh->clks[idx]);
+	if (!c->res_addr)
+		return ERR_PTR(-ENODEV);
+
+	return rpmh->clks[idx];
+}
+
+static int clk_rpmh_probe(struct platform_device *pdev)
+{
+	struct clk_hw **hw_clks;
+	struct clk_rpmh *rpmh_clk;
+	const struct clk_rpmh_desc *desc;
+	int ret, i;
+
+	desc = of_device_get_match_data(&pdev->dev);
+	if (!desc)
+		return -ENODEV;
+
+	hw_clks = desc->clks;
+
+	for (i = 0; i < desc->num_clks; i++) {
+		const char *name;
+		u32 res_addr;
+		size_t aux_data_len;
+		const struct bcm_db *data;
+
+		if (!hw_clks[i])
+			continue;
+
+		name = hw_clks[i]->init->name;
+
+		rpmh_clk = to_clk_rpmh(hw_clks[i]);
+		res_addr = cmd_db_read_addr(rpmh_clk->res_name);
+		if (!res_addr) {
+			if (rpmh_clk->optional)
+				continue;
+			WARN(1, "clk-rpmh: Missing RPMh resource address for %s\n",
+				rpmh_clk->res_name);
+			return -ENODEV;
+		}
+
+		data = cmd_db_read_aux_data(rpmh_clk->res_name, &aux_data_len);
+		if (IS_ERR(data)) {
+			ret = PTR_ERR(data);
+			WARN(1, "clk-rpmh: error reading RPMh aux data for %s (%d)\n",
+				rpmh_clk->res_name, ret);
+			return ret;
+		}
+
+		/* Convert unit from Khz to Hz */
+		if (aux_data_len == sizeof(*data))
+			rpmh_clk->unit = le32_to_cpu(data->unit) * 1000ULL;
+
+		rpmh_clk->res_addr += res_addr;
+		rpmh_clk->dev = &pdev->dev;
+
+		ret = devm_clk_hw_register(&pdev->dev, hw_clks[i]);
+		if (ret) {
+			dev_err(&pdev->dev, "failed to register %s\n", name);
+			return ret;
+		}
+	}
+
+	/* typecast to silence compiler warning */
+	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_rpmh_hw_get,
+					  (void *)desc);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to add clock provider\n");
+		return ret;
+	}
+
+	dev_dbg(&pdev->dev, "Registered RPMh clocks\n");
+
+	return 0;
+}
 
 static const struct of_device_id clk_rpmh_match_table[] = {
-    { .compatible = "qcom,sc7180-rpmh-clk", .data = &clk_rpmh_sc7180},
-    { .compatible = "qcom,sdm845-rpmh-clk", .data = &clk_rpmh_sdm845},
-    { .compatible = "qcom,kona-rpmh-clk", .data = &clk_rpmh_kona},
-    { .compatible = "qcom,sm8150-rpmh-clk", .data = &clk_rpmh_sm8150},
-    { .compatible = "qcom,lahaina-rpmh-clk", .data = &clk_rpmh_lahaina},
-    { .compatible = "qcom,shima-rpmh-clk", .data = &clk_rpmh_shima},
-    { .compatible = "qcom,sm8250-rpmh-clk", .data = &clk_rpmh_sm8250},
-    { .compatible = "qcom,waipio-rpmh-clk", .data = &clk_rpmh_waipio},
-    { .compatible = "qcom,sdxlemur-rpmh-clk", .data = &clk_rpmh_sdxlemur},
-    { .compatible = "qcom,diwali-rpmh-clk", .data = &clk_rpmh_diwali},
-    { .compatible = "qcom,neo-rpmh-clk", .data = &clk_rpmh_neo},
-    { .compatible = "qcom,parrot-rpmh-clk", .data = &clk_rpmh_parrot},
-    { .compatible = "qcom,anorak-rpmh-clk", .data = &clk_rpmh_anorak},
-    { .compatible = "qcom,ravelin-rpmh-clk", .data = &clk_rpmh_ravelin},
-    { }
+	{ .compatible = "qcom,sc7180-rpmh-clk", .data = &clk_rpmh_sc7180},
+	{ .compatible = "qcom,sdm845-rpmh-clk", .data = &clk_rpmh_sdm845},
+	{ .compatible = "qcom,kona-rpmh-clk", .data = &clk_rpmh_kona},
+	{ .compatible = "qcom,sm8150-rpmh-clk", .data = &clk_rpmh_sm8150},
+	{ .compatible = "qcom,lahaina-rpmh-clk", .data = &clk_rpmh_lahaina},
+	{ .compatible = "qcom,shima-rpmh-clk", .data = &clk_rpmh_shima},
+	{ .compatible = "qcom,sm8250-rpmh-clk", .data = &clk_rpmh_sm8250},
+	{ .compatible = "qcom,waipio-rpmh-clk", .data = &clk_rpmh_waipio},
+	{ .compatible = "qcom,sdxlemur-rpmh-clk", .data = &clk_rpmh_sdxlemur},
+	{ .compatible = "qcom,diwali-rpmh-clk", .data = &clk_rpmh_diwali},
+	{ .compatible = "qcom,neo-rpmh-clk", .data = &clk_rpmh_neo},
+	{ .compatible = "qcom,parrot-rpmh-clk", .data = &clk_rpmh_parrot},
+	{ .compatible = "qcom,anorak-rpmh-clk", .data = &clk_rpmh_anorak},
+	{ .compatible = "qcom,ravelin-rpmh-clk", .data = &clk_rpmh_ravelin},
+	{ }
 };
 MODULE_DEVICE_TABLE(of, clk_rpmh_match_table);
 
@@ -582,303 +819,15 @@ static struct platform_driver clk_rpmh_driver = {
 	.probe		= clk_rpmh_probe,
 	.driver		= {
 		.name	= "clk-rpmh",
-                .owner = THIS_MODULE,
 		.of_match_table = clk_rpmh_match_table,
 	},
 };
 
 static int __init clk_rpmh_init(void)
 {
-    int ret;
-
-    ret = platform_driver_register(&clk_rpmh_driver);
-    if (ret)
-        return ret;
-
-    return vdd_cpu_max_init();
+	return platform_driver_register(&clk_rpmh_driver);
 }
-
-module_init(clk_rpmh_init);
-
-#define CLK_RPMH_ARC_EN_OFFSET		0
-#define CLK_RPMH_VRM_EN_OFFSET		4
-
-/**
- * struct bcm_db - Auxiliary data pertaining to each Bus Clock Manager(BCM)
- * @unit: divisor used to convert Hz value to an RPMh msg
- * @width: multiplier used to convert Hz value to an RPMh msg
- * @vcd: virtual clock domain that this bcm belongs to
- * @reserved: reserved to pad the struct
- */
-
-/**
- * struct clk_rpmh - individual rpmh clock data structure
- * @hw:			handle between common and hardware-specific interfaces
- * @res_name:		resource name for the rpmh clock
- * @div:		clock divider to compute the clock rate
- * @res_addr:		base address of the rpmh resource within the RPMh
- * @res_on_val:		rpmh clock enable value
- * @state:		rpmh clock requested state
- * @aggr_state:		rpmh clock aggregated state
- * @last_sent_aggr_state: rpmh clock last aggr state sent to RPMh
- * @valid_state_mask:	mask to determine the state of the rpmh clock
- * @unit:		divisor to convert rate to rpmh msg in magnitudes of Khz
- * @dev:		device to which it is attached
- * @peer:		pointer to the clock rpmh sibling
- */
-
-static DEFINE_MUTEX(rpmh_clk_lock);
-
-#define __DEFINE_CLK_RPMH(_platform, _name, _name_active, _res_name,	\
-			  _res_en_offset, _res_on, _div, _optional)	\
-	static struct clk_rpmh _platform##_##_name_active;		\
-	static struct clk_rpmh _platform##_##_name = {			\
-		.res_name = _res_name,					\
-		.res_addr = _res_en_offset,				\
-		.res_on_val = _res_on,					\
-		.div = _div,						\
-		.optional = _optional,					\
-		.peer = &_platform##_##_name_active,			\
-		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
-				      BIT(RPMH_ACTIVE_ONLY_STATE) |	\
-				      BIT(RPMH_SLEEP_STATE)),		\
-		.hw.init = &(struct clk_init_data){			\
-			.ops = &clk_rpmh_ops,				\
-			.name = #_name,					\
-			.parent_data =  &(const struct clk_parent_data){ \
-					.fw_name = "xo",		\
-					.name = "xo_board",		\
-			},						\
-			.num_parents = 1,				\
-		},							\
-	};								\
-	static struct clk_rpmh _platform##_##_name_active = {		\
-		.res_name = _res_name,					\
-		.res_addr = _res_en_offset,				\
-		.res_on_val = _res_on,					\
-		.div = _div,						\
-		.optional = _optional,					\
-		.peer = &_platform##_##_name,				\
-		.valid_state_mask = (BIT(RPMH_WAKE_ONLY_STATE) |	\
-					BIT(RPMH_ACTIVE_ONLY_STATE)),	\
-		.hw.init = &(struct clk_init_data){			\
-			.ops = &clk_rpmh_ops,				\
-			.name = #_name_active,				\
-			.parent_data =  &(const struct clk_parent_data){ \
-					.fw_name = "xo",		\
-					.name = "xo_board",		\
-			},						\
-			.num_parents = 1,				\
-		},							\
-	}
-
-static inline bool has_state_changed(struct clk_rpmh *c, u32 state)
-{
-	return (c->last_sent_aggr_state & BIT(state))
-		!= (c->aggr_state & BIT(state));
-}
-
-static int clk_rpmh_send(struct clk_rpmh *c, enum rpmh_state state,
-			 struct tcs_cmd *cmd, bool wait)
-{
-	if (wait)
-		return rpmh_write(c->dev, state, cmd, 1);
-
-	return rpmh_write_async(c->dev, state, cmd, 1);
-}
-
-static int clk_rpmh_send_aggregate_command(struct clk_rpmh *c)
-{
-	struct tcs_cmd cmd = { 0 };
-	u32 cmd_state, on_val;
-	enum rpmh_state state = RPMH_SLEEP_STATE;
-	int ret;
-	bool wait;
-
-	cmd.addr = c->res_addr;
-	cmd_state = c->aggr_state;
-	on_val = c->res_on_val;
-
-	for (; state <= RPMH_ACTIVE_ONLY_STATE; state++) {
-		if (has_state_changed(c, state)) {
-			if (cmd_state & BIT(state))
-				cmd.data = on_val;
-
-			wait = cmd_state && state == RPMH_ACTIVE_ONLY_STATE;
-			ret = clk_rpmh_send(c, state, &cmd, wait);
-			if (ret) {
-				dev_err(c->dev, "set %s state of %s failed: (%d)\n",
-					!state ? "sleep" :
-					state == RPMH_WAKE_ONLY_STATE	?
-					"wake" : "active", c->res_name, ret);
-				return ret;
-			}
-		}
-	}
-
-	c->last_sent_aggr_state = c->aggr_state;
-	c->peer->last_sent_aggr_state =  c->last_sent_aggr_state;
-
-	return 0;
-}
-
-/*
- * Update state and aggregate state values based on enable value.
- */
-static int clk_rpmh_aggregate_state_send_command(struct clk_rpmh *c,
-						bool enable)
-{
-	int ret;
-
-	/* Nothing required to be done if already off or on */
-	if (enable == c->state)
-		return 0;
-
-	c->state = enable ? c->valid_state_mask : 0;
-	c->aggr_state = c->state | c->peer->state;
-	c->peer->aggr_state = c->aggr_state;
-
-	ret = clk_rpmh_send_aggregate_command(c);
-	if (!ret)
-		return 0;
-
-	if (ret && enable)
-		c->state = 0;
-	else if (ret)
-		c->state = c->valid_state_mask;
-
-	WARN(1, "clk: %s failed to %s\n", c->res_name,
-	     enable ? "enable" : "disable");
-	return ret;
-}
-
-static int clk_rpmh_prepare(struct clk_hw *hw)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-	int ret = 0;
-
-	mutex_lock(&rpmh_clk_lock);
-	ret = clk_rpmh_aggregate_state_send_command(c, true);
-	mutex_unlock(&rpmh_clk_lock);
-
-	return ret;
-}
-
-static void clk_rpmh_unprepare(struct clk_hw *hw)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-
-	mutex_lock(&rpmh_clk_lock);
-	clk_rpmh_aggregate_state_send_command(c, false);
-	mutex_unlock(&rpmh_clk_lock);
-};
-
-static unsigned long clk_rpmh_recalc_rate(struct clk_hw *hw,
-					unsigned long prate)
-{
-	struct clk_rpmh *r = to_clk_rpmh(hw);
-
-	/*
-	 * RPMh clocks have a fixed rate. Return static rate.
-	 */
-	return prate / r->div;
-}
-
-static const struct clk_ops clk_rpmh_ops = {
-	.prepare	= clk_rpmh_prepare,
-	.unprepare	= clk_rpmh_unprepare,
-	.recalc_rate	= clk_rpmh_recalc_rate,
-};
-
-static int clk_rpmh_bcm_send_cmd(struct clk_rpmh *c, bool enable)
-{
-	struct tcs_cmd cmd = { 0 };
-	u32 cmd_state;
-	int ret = 0;
-
-	mutex_lock(&rpmh_clk_lock);
-	if (enable) {
-		cmd_state = 1;
-		if (c->aggr_state)
-			cmd_state = c->aggr_state;
-	} else {
-		cmd_state = 0;
-	}
-
-	if (cmd_state > BCM_TCS_CMD_VOTE_MASK)
-		cmd_state = BCM_TCS_CMD_VOTE_MASK;
-
-	if (c->last_sent_aggr_state != cmd_state) {
-		cmd.addr = c->res_addr;
-		cmd.data = BCM_TCS_CMD(1, enable, 0, cmd_state);
-
-		ret = clk_rpmh_send(c, RPMH_ACTIVE_ONLY_STATE, &cmd, enable);
-		if (ret) {
-			dev_err(c->dev, "set active state of %s failed: (%d)\n",
-				c->res_name, ret);
-		} else {
-			c->last_sent_aggr_state = cmd_state;
-		}
-	}
-
-	mutex_unlock(&rpmh_clk_lock);
-
-	return ret;
-}
-
-static int clk_rpmh_bcm_prepare(struct clk_hw *hw)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-
-	return clk_rpmh_bcm_send_cmd(c, true);
-}
-
-static void clk_rpmh_bcm_unprepare(struct clk_hw *hw)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-
-	clk_rpmh_bcm_send_cmd(c, false);
-}
-
-static int clk_rpmh_bcm_set_rate(struct clk_hw *hw, unsigned long rate,
-				 unsigned long parent_rate)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-
-	c->aggr_state = rate / c->unit;
-	/*
-	 * Since any non-zero value sent to hw would result in enabling the
-	 * clock, only send the value if the clock has already been prepared.
-	 */
-	if (clk_hw_is_prepared(hw))
-		clk_rpmh_bcm_send_cmd(c, true);
-
-	return 0;
-}
-
-static long clk_rpmh_round_rate(struct clk_hw *hw, unsigned long rate,
-				unsigned long *parent_rate)
-{
-	return rate;
-}
-
-static unsigned long clk_rpmh_bcm_recalc_rate(struct clk_hw *hw,
-					unsigned long prate)
-{
-	struct clk_rpmh *c = to_clk_rpmh(hw);
-
-	return c->aggr_state * c->unit;
-}
-
-static const struct clk_ops clk_rpmh_bcm_ops = {
-	.prepare	= clk_rpmh_bcm_prepare,
-	.unprepare	= clk_rpmh_bcm_unprepare,
-	.set_rate	= clk_rpmh_bcm_set_rate,
-	.round_rate	= clk_rpmh_round_rate,
-	.recalc_rate	= clk_rpmh_bcm_recalc_rate,
-};
-
-/* Resource name must match resource id present in cmd-db */
+core_initcall(clk_rpmh_init);
 
 static void __exit clk_rpmh_exit(void)
 {
