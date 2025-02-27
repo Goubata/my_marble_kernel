@@ -3,10 +3,10 @@ name: Kernel Build Main From my phone
 on:
   push:
     branches:
-      - OC2
+      - CPUUV2
   pull_request:
     branches:
-      - OC2
+      - CPUUV2
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          ref: OC2
+          ref: CPUUV2
 
       - name: 必要なパッケージをインストール
         run: |
@@ -56,5 +56,4 @@ jobs:
         with:
           name: kernel-build-Main
           path: |
-            kernel/out/arch/arm64/boot/Image.gz
-            kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
+            kernel/out/drivers/clk/qcom/clk-rpmh.ko
