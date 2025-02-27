@@ -11,8 +11,16 @@ on:
 
 jobs:
   build:
+      
+    runs-on: ubuntu-latest
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+      CROSS_COMPILE_ARM32: arm-linux-gnueabi-
+      LD: ld.lld
 
-  steps:
+    steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
@@ -210,15 +218,6 @@ jobs:
           df -h
           cat /etc/fstab
           
-    runs-on: ubuntu-latest
-    env:
-      ARCH: arm64
-      SUBARCH: arm64
-      CROSS_COMPILE: aarch64-linux-gnu-
-      CROSS_COMPILE_ARM32: arm-linux-gnueabi-
-      LD: ld.lld
-
-    steps:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
