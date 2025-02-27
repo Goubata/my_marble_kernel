@@ -49,7 +49,7 @@ jobs:
       - name: カーネルをビルド
         run: |
           cd kernel
-          make CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld O=out M=drivers/clk/qcom/ modules -j$(nproc --all)
+          make CC=clang LLVM=1 LLVM_IAS=1 LD=ld.lld O=out Image.gz M=drivers/clk/qcom/ modules -j$(nproc --all)
           
       - name: ビルド成果物をアップロード
         uses: actions/upload-artifact@v4
