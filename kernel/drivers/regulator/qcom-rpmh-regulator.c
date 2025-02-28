@@ -23,6 +23,10 @@
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 
+static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
+                                               unsigned int selector,
+                                               bool wait_for_ack);
+
 /**
  * enum rpmh_regulator_type - supported RPMh accelerator types
  * @VRM:	RPMh VRM accelerator which supports voting on enable, voltage,
@@ -957,39 +961,49 @@ static const struct rpmh_vreg_init_data pm6150l_vreg_data[] = {
 
 static int rpmh_regulator_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	const struct rpmh_vreg_init_data *vreg_data;
-	struct device_node *node;
-	struct rpmh_vreg *vreg;
-	const char *pmic_id;
-	int ret;
+    struct device *dev = &pdev->dev;
+    const struct rpmh_vreg_init_data *vreg_data;
+    struct device_node *node;
+    struct rpmh_vreg *vreg;
+    const char *pmic_id;
+    int ret;
 
-	vreg_data = of_device_get_match_data(dev);
-	if (!vreg_data)
-		return -ENODEV;
+    vreg_data = of_device_get_match_data(dev);
+    if (!vreg_data)
+        return -ENODEV;
 
-	ret = of_property_read_string(dev->of_node, "qcom,pmic-id", &pmic_id);
-	if (ret < 0) {
-		dev_err(dev, "qcom,pmic-id missing in DT node\n");
-		return ret;
-	}
+    ret = of_property_read_string(dev->of_node, "qcom,pmic-id", &pmic_id);
+    if (ret < 0) {
+        dev_err(dev, "qcom,pmic-id missing in DT node\n");
+        return ret;
+    }
 
-	for_each_available_child_of_node(dev->of_node, node) {
-		vreg = devm_kzalloc(dev, sizeof(*vreg), GFP_KERNEL);
-		if (!vreg) {
-			of_node_put(node);
-			return -ENOMEM;
-		}
+    for_each_available_child_of_node(dev->of_node, node) {
+        vreg = devm_kzalloc(dev, sizeof(*vreg), GFP_KERNEL);
+        if (!vreg) {
+            of_node_put(node);
+            return -ENOMEM;
+        }
 
-		ret = rpmh_regulator_init_vreg(vreg, dev, node, pmic_id,
-						vreg_data);
-		if (ret < 0) {
-			of_node_put(node);
-			return ret;
-		}
-	}
+        ret = rpmh_regulator_init_vreg(vreg, dev, node, pmic_id, vreg_data);
+        if (ret < 0) {
+            of_node_put(node);
+            return ret;
+        }
+    }
 
-	return 0;
+    // **ここで sysfs 初期化を実行**
+    ret = cpu_uv_sysfs_init();
+    if (ret)
+        return ret;
+
+    return 0;
+}
+
+static int rpmh_regulator_remove(struct platform_device *pdev)
+{
+    cpu_uv_sysfs_exit();  // sysfs の削除をここで実行
+    return 0;
 }
 
 static const struct of_device_id __maybe_unused rpmh_regulator_match_table[] = {
@@ -1034,11 +1048,12 @@ static const struct of_device_id __maybe_unused rpmh_regulator_match_table[] = {
 MODULE_DEVICE_TABLE(of, rpmh_regulator_match_table);
 
 static struct platform_driver rpmh_regulator_driver = {
-	.driver = {
-		.name = "qcom-rpmh-regulator",
-		.of_match_table	= of_match_ptr(rpmh_regulator_match_table),
-	},
-	.probe = rpmh_regulator_probe,
+    .driver = {
+        .name = "qcom-rpmh-regulator",
+        .of_match_table	= of_match_ptr(rpmh_regulator_match_table),
+    },
+    .probe = rpmh_regulator_probe,
+    .remove = rpmh_regulator_remove,  // ここを追加
 };
 module_platform_driver(rpmh_regulator_driver);
 
@@ -1096,8 +1111,6 @@ static void __exit cpu_uv_sysfs_exit(void)
 	kobject_put(cpu_uv_kobj);
 }
 
-module_init(cpu_uv_sysfs_init);
-module_exit(cpu_uv_sysfs_exit);
 
 MODULE_DESCRIPTION("Qualcomm RPMh regulator driver");
 MODULE_LICENSE("GPL v2");
