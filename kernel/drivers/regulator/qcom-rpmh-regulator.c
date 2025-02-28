@@ -7,6 +7,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -17,6 +19,7 @@
 
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
+
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 
@@ -172,8 +175,8 @@ static int rpmh_regulator_send_request(struct rpmh_vreg *vreg,
 	return ret;
 }
 
-static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
-				unsigned int selector, bool wait_for_ack)
+static int rpmh_regulator_vrm_set_voltage_uv(struct regulator_dev *rdev,
+				unsigned int voltage_uv)
 {
 	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
 	struct tcs_cmd cmd = {
@@ -181,16 +184,16 @@ static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
 	};
 	int ret;
 
-	/* VRM voltage control register is set with voltage in millivolts. */
-	cmd.data = DIV_ROUND_UP(regulator_list_voltage_linear_range(rdev,
-							selector), 1000);
+	/* VRM voltage control registerはミリボルト単位 */
+	cmd.data = voltage_uv / 1000;
 
-	ret = rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
+	ret = rpmh_regulator_send_request(vreg, &cmd, true);
 	if (!ret)
-		vreg->voltage_selector = selector;
+		vreg->voltage_selector = voltage_uv;
 
 	return ret;
 }
+
 
 static int rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
 					unsigned int selector)
@@ -1038,6 +1041,63 @@ static struct platform_driver rpmh_regulator_driver = {
 	.probe = rpmh_regulator_probe,
 };
 module_platform_driver(rpmh_regulator_driver);
+
+static struct regulator_dev *global_rdev;
+
+static ssize_t cpu_uv_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	if (!global_rdev)
+		return -ENODEV;
+
+	return sprintf(buf, "%u\n", rpmh_regulator_vrm_get_voltage_sel(global_rdev));
+}
+
+static ssize_t cpu_uv_store(struct kobject *kobj, struct kobj_attribute *attr,
+			    const char *buf, size_t count)
+{
+	unsigned int voltage_uv;
+	int ret;
+
+	if (!global_rdev)
+		return -ENODEV;
+
+	ret = kstrtouint(buf, 10, &voltage_uv);
+	if (ret)
+		return ret;
+
+	ret = rpmh_regulator_vrm_set_voltage_uv(global_rdev, voltage_uv);
+	if (ret)
+		return ret;
+
+	return count;
+}
+
+static struct kobj_attribute cpu_uv_attr = __ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
+
+static struct kobject *cpu_uv_kobj;
+
+static int __init cpu_uv_sysfs_init(void)
+{
+	int ret;
+
+	cpu_uv_kobj = kobject_create_and_add("cpu_uv", kernel_kobj);
+	if (!cpu_uv_kobj)
+		return -ENOMEM;
+
+	ret = sysfs_create_file(cpu_uv_kobj, &cpu_uv_attr.attr);
+	if (ret)
+		kobject_put(cpu_uv_kobj);
+
+	return ret;
+}
+
+static void __exit cpu_uv_sysfs_exit(void)
+{
+	kobject_put(cpu_uv_kobj);
+}
+
+module_init(cpu_uv_sysfs_init);
+module_exit(cpu_uv_sysfs_exit);
 
 MODULE_DESCRIPTION("Qualcomm RPMh regulator driver");
 MODULE_LICENSE("GPL v2");
