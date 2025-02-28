@@ -254,5 +254,5 @@ jobs:
           name: kernel-build-Main
           path: |
             kernel/out/drivers/clk/qcom/clk-rpmh.ko
-            kernel/drivers/regulator/qcom_rpmh.ko
+            kernel/out/drivers/regulator/qcom_rpmh.ko
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
