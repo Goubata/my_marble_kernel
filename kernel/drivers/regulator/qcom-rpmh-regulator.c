@@ -26,20 +26,6 @@
 static struct kobject *cpu_uv_kobj;
 static struct kobj_attribute cpu_uv_attr;
 
-static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
-                                               unsigned int selector,
-                                               bool wait_for_ack);
-                                               
-{
-    struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
-    struct tcs_cmd cmd = {
-        .addr = vreg->addr + RPMH_REGULATOR_REG_VRM_VOLTAGE,
-        .data = selector,
-    };
-
-    return rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
-}
-
 /**
  * enum rpmh_regulator_type - supported RPMh accelerator types
  * @VRM:	RPMh VRM accelerator which supports voting on enable, voltage,
@@ -228,6 +214,19 @@ static int rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
 
 	return _rpmh_regulator_vrm_set_voltage_sel(rdev, selector,
 					selector > vreg->voltage_selector);
+}
+
+static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
+                                               unsigned int selector,
+                                               bool wait_for_ack)
+{
+    struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
+    struct tcs_cmd cmd = {
+        .addr = vreg->addr + RPMH_REGULATOR_REG_VRM_VOLTAGE,
+        .data = selector,
+    };
+
+    return rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
 }
 
 static int rpmh_regulator_vrm_get_voltage_sel(struct regulator_dev *rdev)
