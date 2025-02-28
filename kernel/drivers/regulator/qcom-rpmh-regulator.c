@@ -26,6 +26,10 @@
 static struct kobject *cpu_uv_kobj;
 static struct kobj_attribute cpu_uv_attr;
 
+static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
+                                               unsigned int selector,
+                                               bool wait_for_ack);
+
 /**
  * enum rpmh_regulator_type - supported RPMh accelerator types
  * @VRM:	RPMh VRM accelerator which supports voting on enable, voltage,
