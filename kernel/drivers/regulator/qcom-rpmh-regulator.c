@@ -7,6 +7,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -18,7 +20,25 @@
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 
+
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
+
+static struct kobject *cpu_uv_kobj;
+static struct kobj_attribute cpu_uv_attr;
+
+static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
+                                               unsigned int selector,
+                                               bool wait_for_ack);
+                                               
+{
+    struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
+    struct tcs_cmd cmd = {
+        .addr = vreg->addr + RPMH_REGULATOR_REG_VRM_VOLTAGE,
+        .data = selector,
+    };
+
+    return rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
+}
 
 /**
  * enum rpmh_regulator_type - supported RPMh accelerator types
@@ -172,8 +192,8 @@ static int rpmh_regulator_send_request(struct rpmh_vreg *vreg,
 	return ret;
 }
 
-static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
-				unsigned int selector, bool wait_for_ack)
+static int rpmh_regulator_vrm_set_voltage_uv(struct regulator_dev *rdev,
+				unsigned int voltage_uv)
 {
 	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
 	struct tcs_cmd cmd = {
@@ -181,16 +201,16 @@ static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
 	};
 	int ret;
 
-	/* VRM voltage control register is set with voltage in millivolts. */
-	cmd.data = DIV_ROUND_UP(regulator_list_voltage_linear_range(rdev,
-							selector), 1000);
+	/* VRM voltage control registerはミリボルト単位 */
+	cmd.data = voltage_uv / 1000;
 
-	ret = rpmh_regulator_send_request(vreg, &cmd, wait_for_ack);
+	ret = rpmh_regulator_send_request(vreg, &cmd, true);
 	if (!ret)
-		vreg->voltage_selector = selector;
+		vreg->voltage_selector = voltage_uv;
 
 	return ret;
 }
+
 
 static int rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
 					unsigned int selector)
@@ -951,42 +971,71 @@ static const struct rpmh_vreg_init_data pm6150l_vreg_data[] = {
 	RPMH_VREG("bob",    "bob%s1",  &pmic5_bob,       "vdd-bob"),
 	{},
 };
+static int __init cpu_uv_sysfs_init(void)
+{
+	int ret;
+
+	cpu_uv_kobj = kobject_create_and_add("cpu_uv", kernel_kobj);
+	if (!cpu_uv_kobj)
+		return -ENOMEM;
+
+	ret = sysfs_create_file(cpu_uv_kobj, &cpu_uv_attr.attr);
+	if (ret)
+		kobject_put(cpu_uv_kobj);
+
+	return ret;
+}
+
+static void __exit cpu_uv_sysfs_exit(void)
+{
+	kobject_put(cpu_uv_kobj);
+}
 
 static int rpmh_regulator_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	const struct rpmh_vreg_init_data *vreg_data;
-	struct device_node *node;
-	struct rpmh_vreg *vreg;
-	const char *pmic_id;
-	int ret;
+    struct device *dev = &pdev->dev;
+    const struct rpmh_vreg_init_data *vreg_data;
+    struct device_node *node;
+    struct rpmh_vreg *vreg;
+    const char *pmic_id;
+    int ret;
 
-	vreg_data = of_device_get_match_data(dev);
-	if (!vreg_data)
-		return -ENODEV;
+    vreg_data = of_device_get_match_data(dev);
+    if (!vreg_data)
+        return -ENODEV;
 
-	ret = of_property_read_string(dev->of_node, "qcom,pmic-id", &pmic_id);
-	if (ret < 0) {
-		dev_err(dev, "qcom,pmic-id missing in DT node\n");
-		return ret;
-	}
+    ret = of_property_read_string(dev->of_node, "qcom,pmic-id", &pmic_id);
+    if (ret < 0) {
+        dev_err(dev, "qcom,pmic-id missing in DT node\n");
+        return ret;
+    }
 
-	for_each_available_child_of_node(dev->of_node, node) {
-		vreg = devm_kzalloc(dev, sizeof(*vreg), GFP_KERNEL);
-		if (!vreg) {
-			of_node_put(node);
-			return -ENOMEM;
-		}
+    for_each_available_child_of_node(dev->of_node, node) {
+        vreg = devm_kzalloc(dev, sizeof(*vreg), GFP_KERNEL);
+        if (!vreg) {
+            of_node_put(node);
+            return -ENOMEM;
+        }
 
-		ret = rpmh_regulator_init_vreg(vreg, dev, node, pmic_id,
-						vreg_data);
-		if (ret < 0) {
-			of_node_put(node);
-			return ret;
-		}
-	}
+        ret = rpmh_regulator_init_vreg(vreg, dev, node, pmic_id, vreg_data);
+        if (ret < 0) {
+            of_node_put(node);
+            return ret;
+        }
+    }
 
-	return 0;
+    // **ここで sysfs 初期化を実行**
+    ret = cpu_uv_sysfs_init();
+    if (ret)
+        return ret;
+
+    return 0;
+}
+
+static int rpmh_regulator_remove(struct platform_device *pdev)
+{
+    cpu_uv_sysfs_exit();  // sysfs の削除をここで実行
+    return 0;
 }
 
 static const struct of_device_id __maybe_unused rpmh_regulator_match_table[] = {
@@ -1031,13 +1080,45 @@ static const struct of_device_id __maybe_unused rpmh_regulator_match_table[] = {
 MODULE_DEVICE_TABLE(of, rpmh_regulator_match_table);
 
 static struct platform_driver rpmh_regulator_driver = {
-	.driver = {
-		.name = "qcom-rpmh-regulator",
-		.of_match_table	= of_match_ptr(rpmh_regulator_match_table),
-	},
-	.probe = rpmh_regulator_probe,
+    .driver = {
+        .name = "qcom-rpmh-regulator",
+        .of_match_table	= of_match_ptr(rpmh_regulator_match_table),
+    },
+    .probe = rpmh_regulator_probe,
+    .remove = rpmh_regulator_remove,  // ここを追加
 };
 module_platform_driver(rpmh_regulator_driver);
+
+static struct regulator_dev *global_rdev;
+
+static ssize_t cpu_uv_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	if (!global_rdev)
+		return -ENODEV;
+
+	return sprintf(buf, "%u\n", rpmh_regulator_vrm_get_voltage_sel(global_rdev));
+}
+
+static ssize_t cpu_uv_store(struct kobject *kobj, struct kobj_attribute *attr,
+			    const char *buf, size_t count)
+{
+	unsigned int voltage_uv;
+	int ret;
+
+	if (!global_rdev)
+		return -ENODEV;
+
+	ret = kstrtouint(buf, 10, &voltage_uv);
+	if (ret)
+		return ret;
+
+	ret = rpmh_regulator_vrm_set_voltage_uv(global_rdev, voltage_uv);
+	if (ret)
+		return ret;
+
+	return count;
+}
+static struct kobj_attribute cpu_uv_attr = __ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
 
 MODULE_DESCRIPTION("Qualcomm RPMh regulator driver");
 MODULE_LICENSE("GPL v2");
