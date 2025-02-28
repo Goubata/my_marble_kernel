@@ -23,6 +23,9 @@
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 
+static int cpu_uv_sysfs_init(void);
+static void cpu_uv_sysfs_exit(void);
+
 static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
                                                unsigned int selector,
                                                bool wait_for_ack);
