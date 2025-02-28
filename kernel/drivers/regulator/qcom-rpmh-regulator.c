@@ -958,6 +958,25 @@ static const struct rpmh_vreg_init_data pm6150l_vreg_data[] = {
 	RPMH_VREG("bob",    "bob%s1",  &pmic5_bob,       "vdd-bob"),
 	{},
 };
+static int __init cpu_uv_sysfs_init(void)
+{
+	int ret;
+
+	cpu_uv_kobj = kobject_create_and_add("cpu_uv", kernel_kobj);
+	if (!cpu_uv_kobj)
+		return -ENOMEM;
+
+	ret = sysfs_create_file(cpu_uv_kobj, &cpu_uv_attr.attr);
+	if (ret)
+		kobject_put(cpu_uv_kobj);
+
+	return ret;
+}
+
+static void __exit cpu_uv_sysfs_exit(void)
+{
+	kobject_put(cpu_uv_kobj);
+}
 
 static int rpmh_regulator_probe(struct platform_device *pdev)
 {
@@ -1090,26 +1109,6 @@ static ssize_t cpu_uv_store(struct kobject *kobj, struct kobj_attribute *attr,
 static struct kobj_attribute cpu_uv_attr = __ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
 
 static struct kobject *cpu_uv_kobj;
-
-static int __init cpu_uv_sysfs_init(void)
-{
-	int ret;
-
-	cpu_uv_kobj = kobject_create_and_add("cpu_uv", kernel_kobj);
-	if (!cpu_uv_kobj)
-		return -ENOMEM;
-
-	ret = sysfs_create_file(cpu_uv_kobj, &cpu_uv_attr.attr);
-	if (ret)
-		kobject_put(cpu_uv_kobj);
-
-	return ret;
-}
-
-static void __exit cpu_uv_sysfs_exit(void)
-{
-	kobject_put(cpu_uv_kobj);
-}
 
 
 MODULE_DESCRIPTION("Qualcomm RPMh regulator driver");
