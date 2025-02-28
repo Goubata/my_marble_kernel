@@ -23,8 +23,8 @@
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 
-static int cpu_uv_sysfs_init(void);
-static void cpu_uv_sysfs_exit(void);
+static struct kobject *cpu_uv_kobj;
+static struct kobj_attribute cpu_uv_attr;
 
 static int _rpmh_regulator_vrm_set_voltage_sel(struct regulator_dev *rdev,
                                                unsigned int selector,
@@ -1108,11 +1108,7 @@ static ssize_t cpu_uv_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	return count;
 }
-
 static struct kobj_attribute cpu_uv_attr = __ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
-
-static struct kobject *cpu_uv_kobj;
-
 
 MODULE_DESCRIPTION("Qualcomm RPMh regulator driver");
 MODULE_LICENSE("GPL v2");
