@@ -17,6 +17,7 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/of_address.h>
+#include <linux/sysfs.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <soc/qcom/dcvs.h>
@@ -767,6 +768,7 @@ static int qcom_dcvs_hw_probe(struct platform_device *pdev)
 	hw->hw_min_freq = hw->freq_table[0];
 	/* start with boost_freq = max_freq for better boot perf */
 	hw->boost_freq = hw->hw_max_freq;
+	hw->current_voltage = 900000; 
 
 	ret = of_property_read_u32(dev->of_node, QCOM_DCVS_WIDTH_PROP,
 								&hw->width);
