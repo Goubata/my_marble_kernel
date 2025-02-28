@@ -192,6 +192,59 @@ static ssize_t show_available_frequencies(struct kobject *kobj,
 	return cnt;
 }
 
+/* === ここから追加 === */
+static ssize_t store_voltage(struct kobject *kobj,
+			struct attribute *attr, const char *buf,
+			size_t count)
+{
+	int ret;
+	unsigned int val;
+	struct dcvs_hw *hw = to_dcvs_hw(kobj);
+	struct dcvs_path *path;
+	struct dcvs_freq new_freq;
+
+	ret = kstrtouint(buf, 10, &val);
+	if (ret < 0)
+		return ret;
+
+	/* 範囲チェック（仮の範囲: 600000uV ~ 1200000uV） */
+	val = clamp(val, 600000U, 1200000U);
+
+	/* 電圧値を保存 */
+	hw->current_voltage = val;
+
+	/* 適用対象のパスを取得 */
+	path = hw->dcvs_paths[DCVS_SLOW_PATH];
+	if (!path)
+		return -EPERM;
+
+	/* 電圧変更による影響を適用 */
+	mutex_lock(&path->voter_lock);
+	new_freq.ib = get_target_freq(path, path->cur_freq.ib);  
+	new_freq.ab = path->cur_freq.ab;
+	new_freq.hw_type = hw->type;
+
+	if (new_freq.ib != path->cur_freq.ib) {
+		ret = path->commit_dcvs_freqs(path, &new_freq, 1);
+		if (ret < 0)
+			pr_err("Error setting voltage-modified freq: %d\n", ret);
+	}
+	mutex_unlock(&path->voter_lock);
+
+	pr_info("qcom-dcvs: Voltage set to %u uV\n", val);
+	return count;
+}
+
+static ssize_t show_voltage(struct kobject *kobj,
+				struct attribute *attr, char *buf)
+{
+	struct dcvs_hw *hw = to_dcvs_hw(kobj);
+	return scnprintf(buf, PAGE_SIZE, "%u\n", hw->current_voltage);
+}
+
+DCVS_ATTR_RW(voltage);
+/* === ここまで追加 === */
+
 show_attr(hw_min_freq);
 show_attr(hw_max_freq);
 show_attr(boost_freq);
@@ -208,6 +261,7 @@ static struct attribute *dcvs_hw_attr[] = {
 	&boost_freq.attr,
 	&cur_freq.attr,
 	&available_frequencies.attr,
+	&voltage.attr,  // 電圧ノード追加
 	NULL,
 };
 
