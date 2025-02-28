@@ -698,30 +698,36 @@ static int populate_freq_table(struct device *dev, u32 **freq_table)
 
 static int qcom_dcvs_dev_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	int ret;
+    struct device *dev = &pdev->dev;
+    int ret;
 
-	dcvs_data = devm_kzalloc(dev, sizeof(*dcvs_data), GFP_KERNEL);
-	if (!dcvs_data)
-		return -ENOMEM;
+    pr_info("qcom-dcvs: Entering qcom_dcvs_dev_probe\n");  // デバッグログ
 
-	dcvs_data->num_hw = of_get_available_child_count(dev->of_node);
-	if (!dcvs_data->num_hw) {
-		dev_err(dev, "No dcvs hw nodes provided!\n");
-		return -ENODEV;
-	}
+    dcvs_data = devm_kzalloc(dev, sizeof(*dcvs_data), GFP_KERNEL);
+    if (!dcvs_data) {
+        dev_err(dev, "Failed to allocate dcvs_data\n");
+        return -ENOMEM;
+    }
 
-	ret = kobject_init_and_add(&dcvs_data->kobj, &qcom_dcvs_ktype,
-			&cpu_subsys.dev_root->kobj, "bus_dcvs");
-	if (ret < 0) {
-		dev_err(dev, "failed to init qcom-dcvs kobj: %d\n", ret);
-		kobject_put(&dcvs_data->kobj);
-		return ret;
-	}
-	dev_dbg(dev, "Created kobj: %s\n", kobject_name(&dcvs_data->kobj));
+    dcvs_data->num_hw = of_get_available_child_count(dev->of_node);
+    if (!dcvs_data->num_hw) {
+        dev_err(dev, "No dcvs hw nodes provided!\n");
+        return -ENODEV;
+    }
 
-	return 0;
+    ret = kobject_init_and_add(&dcvs_data->kobj, &qcom_dcvs_ktype,
+            &cpu_subsys.dev_root->kobj, "qcom-dcvs");  // "bus_dcvs" → "qcom-dcvs" に変更
+    if (ret < 0) {
+        dev_err(dev, "failed to init qcom-dcvs kobj: %d\n", ret);
+        kobject_put(&dcvs_data->kobj);
+        return ret;
+    }
+
+    pr_info("qcom-dcvs: Successfully created kobj: %s\n", kobject_name(&dcvs_data->kobj)); // デバッグログ
+
+    return 0;
 }
+
 
 static int qcom_dcvs_hw_probe(struct platform_device *pdev)
 {
