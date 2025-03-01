@@ -28,6 +28,8 @@
 #include <trace/events/dcvsh.h>
 
 #define LUT_MAX_ENTRIES			40U
+#define MIN_VOLTAGE			600000
+#define MAX_VOLTAGE			1200000
 #define LUT_SRC				GENMASK(31, 30)
 #define LUT_L_VAL			GENMASK(7, 0)
 #define LUT_CORE_COUNT			GENMASK(18, 16)
@@ -259,6 +261,40 @@ u64 qcom_cpufreq_get_cpu_cycle_counter(int cpu)
 }
 EXPORT_SYMBOL_GPL(qcom_cpufreq_get_cpu_cycle_counter);
 
+static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct cpufreq_qcom *c = dev_get_drvdata(dev);
+    u32 volt;
+    if (!c || !c->base)
+        return -ENODEV;
+
+    volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);  // 現在の電圧取得
+    return scnprintf(buf, PAGE_SIZE, "%u\n", volt);
+}
+
+static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    struct cpufreq_qcom *c = dev_get_drvdata(dev);
+    unsigned long new_volt;
+    int ret;
+
+    if (!c || !c->base)
+        return -ENODEV;
+
+    ret = kstrtoul(buf, 10, &new_volt);
+    if (ret)
+        return ret;
+
+    if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE)
+        return -EINVAL;
+
+    pr_info("Setting CPU voltage: %lu\n", new_volt);
+    writel_relaxed(new_volt, c->base + offsets[REG_VOLT_LUT]);  // 電圧設定
+    return count;
+}
+
+static DEVICE_ATTR_RW(cpu_voltage);
+
 static int
 qcom_cpufreq_hw_target_index(struct cpufreq_policy *policy,
 			     unsigned int index)
@@ -315,8 +351,7 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 
 	cpu_dev = get_cpu_device(policy->cpu);
 	if (!cpu_dev) {
-		pr_err("%s: failed to get cpu%d device\n", __func__,
-				policy->cpu);
+		pr_err("%s: failed to get cpu%d device\n", __func__, policy->cpu);
 		return -ENODEV;
 	}
 
@@ -340,11 +375,10 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 	dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
 
 	if (c->dcvsh_irq > 0 && !c->is_irq_requested) {
-		snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name),
-					"dcvsh-irq-%d", policy->cpu);
+		snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name), "dcvsh-irq-%d", policy->cpu);
 		ret = devm_request_threaded_irq(cpu_dev, c->dcvsh_irq, NULL,
-			dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT |
-			IRQF_NO_SUSPEND, c->dcvsh_irq_name, c);
+			dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT | IRQF_NO_SUSPEND,
+			c->dcvsh_irq_name, c);
 		if (ret) {
 			dev_err(cpu_dev, "Failed to register irq %d\n", ret);
 			return ret;
@@ -352,8 +386,7 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 
 		ret = irq_set_affinity_hint(c->dcvsh_irq, &c->related_cpus);
 		if (ret)
-			dev_err(cpu_dev, "Failed to set affinity for irq %d\n",
-					c->dcvsh_irq);
+			dev_err(cpu_dev, "Failed to set affinity for irq %d\n", c->dcvsh_irq);
 
 		c->is_irq_requested = true;
 		writel_relaxed(0x0, c->base + offsets[REG_INTR_CLR]);
@@ -367,8 +400,14 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 		device_create_file(cpu_dev, &c->freq_limit_attr);
 	}
 
+	/* 追加: 電圧制御用の sysfs エントリを作成 */
+	ret = device_create_file(cpu_dev, &dev_attr_cpu_voltage);
+	if (ret)
+		dev_err(cpu_dev, "Failed to create voltage sysfs entry for CPU%d\n", policy->cpu);
+
 	return 0;
 }
+
 
 static struct freq_attr *qcom_cpufreq_hw_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
@@ -508,16 +547,12 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (ukee_overclock) {
 		if (cpu == 0) {
-			c->table[i++].frequency = 1800000;
+			c->table[i++].frequency = 1804000;
 			c->table[i++].frequency = 1920000;
 			c->table[i++].frequency = 2016000;
-			c->table[i++].frequency = 2445600;
+			c->table[i++].frequency = 2323200;
 		} else if (cpu == 4) {
 			c->table[i++].frequency = 2500000;
-			c->table[i++].frequency = 2572800;
-			c->table[i++].frequency = 2649600;
-			c->table[i++].frequency = 2745600;
-			c->table[i++].frequency = 2865600;
 		} else if (cpu == 7) {
 			c->table[i++].frequency = 3000000;
 			c->table[i++].frequency = 3200200;
