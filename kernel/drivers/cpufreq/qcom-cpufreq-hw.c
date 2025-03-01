@@ -320,7 +320,10 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
 
     pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
     writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
-
+    
+    u32 readback_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
+    pr_info("cpu_voltage_store: Read-back voltage from REG_VOLT_LUT = %u\n", readback_volt);
+    
     return count;
 }
 
