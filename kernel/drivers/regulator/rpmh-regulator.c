@@ -39,7 +39,17 @@ static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, ch
 	return sprintf(buf, "%d\n", cpu_uv_value);
 }
 
-struct rpmh_vreg;  // 前方宣言（incomplete type）
+struct rpmh_vreg {
+	struct device_node		*of_node;
+	struct regulator_desc		rdesc;
+	struct regulator_dev		*rdev;
+	struct rpmh_aggr_vreg		*aggr_vreg;
+	bool				set_active;
+	bool				set_sleep;
+	struct rpmh_regulator_request	req;
+	int				mode_index;
+};
+
 struct rpmh_aggr_vreg;  // `aggr_vreg` にアクセスするために追加
 
 struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
@@ -341,16 +351,6 @@ struct rpmh_aggr_vreg {
  * @mode_index:			RPMh VRM regulator mode selected by index into
  *				aggr_vreg->mode
  */
-struct rpmh_vreg {
-	struct device_node		*of_node;
-	struct regulator_desc		rdesc;
-	struct regulator_dev		*rdev;
-	struct rpmh_aggr_vreg		*aggr_vreg;
-	bool				set_active;
-	bool				set_sleep;
-	struct rpmh_regulator_request	req;
-	int				mode_index;
-};
 
 #define RPMH_REGULATOR_MODE_COUNT		5
 
