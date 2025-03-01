@@ -1177,6 +1177,8 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
 static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
 			    const char *buf, size_t count)
 {
+	pr_info("cpu_uv_store() called with input: %s\n", buf);
+		
 	int uv, rc;
 	struct regulator_dev *rdev;
 	struct rpmh_vreg *vreg;
