@@ -270,8 +270,10 @@ static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *att
     struct cpufreq_qcom *c = dev_get_drvdata(dev);
     u32 volt;
 
+    pr_info("cpu_voltage_show: Function called\n");
+
     if (!c) {
-        pr_err("cpu_voltage_show: cpufreq_qcom struct is NULL\n");
+        pr_err("cpu_voltage_show: cpufreq_qcom struct is NULL (dev=%p)\n", dev);
         return -ENODEV;
     }
 
@@ -281,11 +283,13 @@ static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *att
     }
 
     pr_info("cpu_voltage_show: REG_VOLT_LUT offset = 0x%x\n", offsets[REG_VOLT_LUT]);
-    
+
     volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
     pr_info("cpu_voltage_show: Read voltage = %u\n", volt);
+
     return scnprintf(buf, PAGE_SIZE, "%u\n", volt);
 }
+
 
 static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -293,20 +297,33 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
     unsigned long new_volt;
     int ret;
 
-    if (!c || !c->base)
+    pr_info("cpu_voltage_store: Function called\n");
+
+    if (!c) {
+        pr_err("cpu_voltage_store: cpufreq_qcom struct is NULL (dev=%p)\n", dev);
         return -ENODEV;
+    }
+
+    if (!c->base) {
+        pr_err("cpu_voltage_store: c->base is NULL\n");
+        return -ENODEV;
+    }
 
     ret = kstrtoul(buf, 10, &new_volt);
     if (ret)
         return ret;
 
-    if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE)
+    if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE) {
+        pr_err("cpu_voltage_store: Voltage out of range: %lu\n", new_volt);
         return -EINVAL;
+    }
 
-    pr_info("Setting CPU voltage: %lu\n", new_volt);
-    writel_relaxed(new_volt, c->base + offsets[REG_VOLT_LUT]);  // 電圧設定
+    pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
+    writel_relaxed(new_volt, c->base + offsets[REG_VOLT_LUT]);
+
     return count;
 }
+
 
 static DEVICE_ATTR_RW(cpu_voltage);
 
