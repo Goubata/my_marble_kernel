@@ -1271,7 +1271,6 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 
 	return rc;
 }
-}
 
 /**
  * rpmh_regulator_vrm_get_voltage() - get the voltage of the VRM rpmh-regulator
