@@ -6,6 +6,10 @@
 #include <linux/bitfield.h>
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
+#include <linux/device.h>   // デバイス関連の API (sysfs 含む)
+#include <linux/sysfs.h>    // sysfs 操作 (`device_create_file()` など)
+#include <linux/fs.h>       // ファイルシステム関連 (`device_create_file()` で必要)
+#include <linux/uaccess.h>  // ユーザー空間データの処理 (`kstrtoul()` で必要)
 #include <linux/energy_model.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
