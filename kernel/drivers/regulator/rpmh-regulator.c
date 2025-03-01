@@ -1211,7 +1211,7 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
 }
 
 // `sysfs` で `cpu_uv` を操作できるようにする
-static DEVICE_ATTR_RW(cpu_uv);
+static DEVICE_ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
 
 
 /**
