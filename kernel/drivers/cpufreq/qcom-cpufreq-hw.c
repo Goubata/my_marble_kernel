@@ -377,66 +377,74 @@ qcom_cpufreq_hw_fast_switch(struct cpufreq_policy *policy,
 
 static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 {
-	struct cpufreq_qcom *c;
-	struct device *cpu_dev;
-	int ret;
+    struct cpufreq_qcom *c;
+    struct device *cpu_dev;
+    int ret;
 
-	cpu_dev = get_cpu_device(policy->cpu);
-	if (!cpu_dev) {
-		pr_err("%s: failed to get cpu%d device\n", __func__, policy->cpu);
-		return -ENODEV;
-	}
+    cpu_dev = get_cpu_device(policy->cpu);
+    if (!cpu_dev) {
+        pr_err("%s: failed to get cpu%d device\n", __func__, policy->cpu);
+        return -ENODEV;
+    }
 
-	c = qcom_freq_domain_map[policy->cpu];
-	if (!c) {
-		pr_err("No scaling support for CPU%d\n", policy->cpu);
-		return -ENODEV;
-	}
+    c = qcom_freq_domain_map[policy->cpu];
+    if (!c) {
+        pr_err("No scaling support for CPU%d, qcom_freq_domain_map is NULL\n", policy->cpu);
+        return -ENODEV;
+    }
 
-	cpumask_copy(policy->cpus, &c->related_cpus);
+    cpumask_copy(policy->cpus, &c->related_cpus);
 
-	ret = dev_pm_opp_get_opp_count(cpu_dev);
-	if (ret <= 0)
-		dev_err(cpu_dev, "OPP table is not ready\n");
+    ret = dev_pm_opp_get_opp_count(cpu_dev);
+    if (ret <= 0)
+        dev_err(cpu_dev, "OPP table is not ready\n");
 
-	policy->freq_table = c->table;
-	policy->driver_data = c->base;
-	policy->fast_switch_possible = true;
-	policy->dvfs_possible_from_any_cpu = true;
+    policy->freq_table = c->table;
+    policy->driver_data = c->base;
+    policy->fast_switch_possible = true;
+    policy->dvfs_possible_from_any_cpu = true;
 
-	dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
+    dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
 
-	if (c->dcvsh_irq > 0 && !c->is_irq_requested) {
-		snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name), "dcvsh-irq-%d", policy->cpu);
-		ret = devm_request_threaded_irq(cpu_dev, c->dcvsh_irq, NULL,
-			dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT | IRQF_NO_SUSPEND,
-			c->dcvsh_irq_name, c);
-		if (ret) {
-			dev_err(cpu_dev, "Failed to register irq %d\n", ret);
-			return ret;
-		}
+    /* 🔹 OC ハック (dcvsh_freq_limit の sysfs を維持) */
+    if (c->dcvsh_irq > 0 && !c->is_irq_requested) {
+        snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name), "dcvsh-irq-%d", policy->cpu);
+        ret = devm_request_threaded_irq(cpu_dev, c->dcvsh_irq, NULL,
+            dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT | IRQF_NO_SUSPEND,
+            c->dcvsh_irq_name, c);
+        if (ret) {
+            dev_err(cpu_dev, "Failed to register irq %d\n", ret);
+            return ret;
+        }
 
-		ret = irq_set_affinity_hint(c->dcvsh_irq, &c->related_cpus);
-		if (ret)
-			dev_err(cpu_dev, "Failed to set affinity for irq %d\n", c->dcvsh_irq);
+        ret = irq_set_affinity_hint(c->dcvsh_irq, &c->related_cpus);
+        if (ret)
+            dev_err(cpu_dev, "Failed to set affinity for irq %d\n", c->dcvsh_irq);
 
-		c->is_irq_requested = true;
-		writel_relaxed(0x0, c->base + offsets[REG_INTR_CLR]);
-		c->is_irq_enabled = true;
+        c->is_irq_requested = true;
+        writel_relaxed(0x0, c->base + offsets[REG_INTR_CLR]);
+        c->is_irq_enabled = true;
 
-		sysfs_attr_init(&c->freq_limit_attr.attr);
-		c->freq_limit_attr.attr.name = "dcvsh_freq_limit";
-		c->freq_limit_attr.show = dcvsh_freq_limit_show;
-		c->freq_limit_attr.attr.mode = 0444;
-		c->dcvsh_freq_limit = U32_MAX;
-		device_create_file(cpu_dev, &c->freq_limit_attr);
-	}
+        sysfs_attr_init(&c->freq_limit_attr.attr);
+        c->freq_limit_attr.attr.name = "dcvsh_freq_limit";
+        c->freq_limit_attr.show = dcvsh_freq_limit_show;
+        c->freq_limit_attr.attr.mode = 0444;
+        c->dcvsh_freq_limit = U32_MAX;
+        device_create_file(cpu_dev, &c->freq_limit_attr);
+    }
 
-	ret = device_create_file(cpu_dev, &dev_attr_cpu_voltage);
-	if (ret)
-		dev_err(cpu_dev, "Failed to create voltage sysfs entry for CPU%d\n", policy->cpu);
+    /* 🔹 `dev_set_drvdata()` を追加 (重要) */
+    dev_set_drvdata(cpu_dev, c);
+    pr_info("qcom_cpufreq_hw_cpu_init: Set drvdata for CPU%d (c=%p, base=%p)\n", policy->cpu, c, c->base);
 
-	return 0;
+    /* 🔹 sysfs `cpu_voltage` の登録 */
+    ret = device_create_file(cpu_dev, &dev_attr_cpu_voltage);
+    if (ret)
+        pr_err("Failed to create cpu_voltage sysfs entry for CPU%d (error %d)\n", policy->cpu, ret);
+    else
+        pr_info("Successfully created cpu_voltage sysfs entry for CPU%d\n", policy->cpu);
+
+    return 0;
 }
 
 
