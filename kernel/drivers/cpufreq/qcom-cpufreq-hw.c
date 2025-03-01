@@ -32,7 +32,7 @@
 #include <trace/events/dcvsh.h>
 
 #define LUT_MAX_ENTRIES			40U
-#define MIN_VOLTAGE			600000
+#define MIN_VOLTAGE			400000
 #define MAX_VOLTAGE			1200000
 #define LUT_SRC				GENMASK(31, 30)
 #define LUT_L_VAL			GENMASK(7, 0)
@@ -319,7 +319,7 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
     }
 
     pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
-    writel_relaxed(new_volt, c->base + offsets[REG_VOLT_LUT]);
+    writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
 
     return count;
 }
