@@ -45,7 +45,7 @@ struct rpmh_aggr_vreg;  // `aggr_vreg` にアクセスするために追加
 struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
 
 static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
-				int min_uv, int max_uv, unsigned int *selector)
+				int min_uv, int max_uv, unsigned int *selector);
 /*
  * sysfs で CPU の電圧を設定する関数
  * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
