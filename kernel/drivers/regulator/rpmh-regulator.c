@@ -34,9 +34,14 @@ static int cpu_uv_value = 800000;
  * sysfs で CPU の電圧を取得する関数
  * cat /sys/devices/platform/rpmh-regulator/cpu_uv で現在の電圧を確認できる
  */
+ 
 static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", cpu_uv_value);
+    // ==== 【変更点】デバッグログ追加 ====
+    dev_info(dev, "cpu_uv_show called. Returning: %d\n", cpu_uv_value);
+
+    // ==== 【重要】`cpu_uv_value` を `sysfs` から読み取れるようにする ====
+    return sprintf(buf, "%d\n", cpu_uv_value);
 }
 
 struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
@@ -1203,6 +1208,7 @@ dev_info(dev, "Attempting to set CPU voltage to: %d uV\n", uv);
 	// 電圧設定を適用
 	mutex_lock(&vreg->aggr_vreg->lock);
 	cpu_uv_value = uv;
+	dev_info(dev, "cpu_uv_store: Updated cpu_uv_value to: %d\n", cpu_uv_value); // デバッグログ追加
 	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
 	mutex_unlock(&vreg->aggr_vreg->lock);
 	
@@ -2298,9 +2304,12 @@ static int rpmh_regulator_probe(struct platform_device *pdev)
 		mutex_unlock(&aggr_vreg->lock);
 	}
 
-		rc = device_create_file(&pdev->dev, &dev_attr_cpu_uv);
-	if (rc)
-		dev_err(dev, "Failed to create sysfs entry for CPU UV\n");
+		rc = device_create_file(dev, &dev_attr_cpu_uv);
+if (rc)
+    dev_err(dev, "Failed to create sysfs entry for CPU UV, rc=%d\n", rc);
+else
+    dev_info(dev, "Successfully created sysfs entry for CPU UV\n");
+
 
 	of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
 	platform_set_drvdata(pdev, aggr_vreg);
