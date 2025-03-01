@@ -39,6 +39,17 @@ static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, ch
 	return sprintf(buf, "%d\n", cpu_uv_value);
 }
 
+struct rpmh_vreg {
+	struct device_node		*of_node;
+	struct regulator_desc		rdesc;
+	struct regulator_dev		*rdev;
+	struct rpmh_aggr_vreg		*aggr_vreg;
+	bool				set_active;
+	bool				set_sleep;
+	struct rpmh_regulator_request	req;
+	int				mode_index;
+};
+
 struct rpmh_aggr_vreg {
 	struct device			*dev;
 	const char			*resource_name;
@@ -61,152 +72,10 @@ struct rpmh_aggr_vreg {
 	struct rpmh_regulator_request	aggr_req_sleep;
 };
 
-/**
- * struct rpmh_vreg - individual rpmh regulator data structure encapsulating a
- *		regulator framework regulator device and its corresponding
- *		rpmh request
- * @of_node:			Device node pointer for the individual rpmh
- *				regulator
- * @name:			Name of the regulator
- * @rdesc:			Regulator descriptor
- * @rdev:			Regulator device pointer returned by
- *				devm_regulator_register()
- * @aggr_vreg:			Pointer to the aggregated rpmh regulator
- *				resource
- * @set_active:			Boolean flag indicating that requests made by
- *				this regulator should take affect in the active
- *				set
- * @set_sleep:			Boolean flag indicating that requests made by
- *				this regulator should take affect in the sleep
- *				set
- * @req:			RPMh accelerator register request
- * @mode_index:			RPMh VRM regulator mode selected by index into
- *				aggr_vreg->mode
- */
-struct rpmh_vreg {
-	struct device_node		*of_node;
-	struct regulator_desc		rdesc;
-	struct regulator_dev		*rdev;
-	struct rpmh_aggr_vreg		*aggr_vreg;
-	bool				set_active;
-	bool				set_sleep;
-	struct rpmh_regulator_request	req;
-	int				mode_index;
+struct rpmh_regulator_request {
+	u32				reg[RPMH_REGULATOR_REG_MAX];
+	u32				valid;
 };
-
-#define RPMH_REGULATOR_MODE_COUNT		5
-
-#define RPMH_REGULATOR_MODE_PMIC4_LDO_RM	4
-#define RPMH_REGULATOR_MODE_PMIC4_LDO_LPM	5
-#define RPMH_REGULATOR_MODE_PMIC4_LDO_HPM	7
-
-#define RPMH_REGULATOR_MODE_PMIC4_SMPS_RM	4
-#define RPMH_REGULATOR_MODE_PMIC4_SMPS_PFM	5
-#define RPMH_REGULATOR_MODE_PMIC4_SMPS_AUTO	6
-#define RPMH_REGULATOR_MODE_PMIC4_SMPS_PWM	7
-
-#define RPMH_REGULATOR_MODE_PMIC4_BOB_PASS	0
-#define RPMH_REGULATOR_MODE_PMIC4_BOB_PFM	1
-#define RPMH_REGULATOR_MODE_PMIC4_BOB_AUTO	2
-#define RPMH_REGULATOR_MODE_PMIC4_BOB_PWM	3
-
-#define RPMH_REGULATOR_MODE_PMIC5_LDO_RM	3
-#define RPMH_REGULATOR_MODE_PMIC5_LDO_LPM	4
-#define RPMH_REGULATOR_MODE_PMIC5_LDO_HPM	7
-
-#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_RM	3
-#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_PFM	4
-#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_AUTO	6
-#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_PWM	7
-
-#define RPMH_REGULATOR_MODE_PMIC5_FTSMPS_RM	3
-#define RPMH_REGULATOR_MODE_PMIC5_FTSMPS_PWM	7
-
-#define RPMH_REGULATOR_MODE_PMIC5_BOB_PASS	2
-#define RPMH_REGULATOR_MODE_PMIC5_BOB_PFM	4
-#define RPMH_REGULATOR_MODE_PMIC5_BOB_AUTO	6
-#define RPMH_REGULATOR_MODE_PMIC5_BOB_PWM	7
-
-static void rpmh_regulator_req(struct rpmh_vreg *vreg,
-		struct rpmh_regulator_request *current_req,
-		struct rpmh_regulator_request *prev_req,
-		u32 sent_mask,
-		enum rpmh_state state)
-{
-	struct rpmh_aggr_vreg *aggr_vreg = vreg->aggr_vreg;
-	char buf[DEBUG_PRINT_BUFFER_SIZE];
-	size_t buflen = DEBUG_PRINT_BUFFER_SIZE;
-	const char *const *param_name;
-	int i, max_reg_index;
-	int pos = 0;
-	u32 valid;
-	bool first;
-
-	switch (aggr_vreg->regulator_type) {
-	case RPMH_REGULATOR_TYPE_VRM:
-		max_reg_index = RPMH_REGULATOR_REG_VRM_MAX;
-		param_name = rpmh_regulator_vrm_param_names;
-		break;
-	case RPMH_REGULATOR_TYPE_ARC:
-		max_reg_index = RPMH_REGULATOR_REG_ARC_REAL_MAX;
-		param_name = rpmh_regulator_arc_param_names;
-		break;
-	case RPMH_REGULATOR_TYPE_XOB:
-		max_reg_index = RPMH_REGULATOR_REG_XOB_MAX;
-		param_name = rpmh_regulator_xob_param_names;
-		break;
-	case RPMH_REGULATOR_TYPE_PBS:
-		max_reg_index = RPMH_REGULATOR_REG_PBS_MAX;
-		param_name = rpmh_regulator_pbs_param_names;
-		break;
-	default:
-		return;
-	}
-
-	pos += scnprintf(buf + pos, buflen - pos,
-			"%s (%s), addr=0x%05X: s=%s; sent: ",
-			aggr_vreg->resource_name, vreg->rdesc.name,
-			aggr_vreg->addr, rpmh_regulator_state_names[state]);
-
-	valid = sent_mask;
-	first = true;
-	for (i = 0; i < max_reg_index; i++) {
-		if (valid & BIT(i)) {
-			pos += scnprintf(buf + pos, buflen - pos, "%s%s=%u",
-					(first ? "" : ", "), param_name[i],
-					current_req->reg[i]);
-			first = false;
-			if (aggr_vreg->regulator_type
-				== RPMH_REGULATOR_TYPE_ARC
-			    && i == RPMH_REGULATOR_REG_ARC_LEVEL)
-				pos += scnprintf(buf + pos, buflen - pos,
-					" (vlvl=%u)",
-					aggr_vreg->level[current_req->reg[i]]);
-		}
-	}
-
-	valid = prev_req->valid & ~sent_mask;
-
-	if (valid)
-		pos += scnprintf(buf + pos, buflen - pos, "; prev: ");
-	first = true;
-	for (i = 0; i < max_reg_index; i++) {
-		if (valid & BIT(i)) {
-			pos += scnprintf(buf + pos, buflen - pos, "%s%s=%u",
-					(first ? "" : ", "), param_name[i],
-					current_req->reg[i]);
-			first = false;
-			if (aggr_vreg->regulator_type
-				== RPMH_REGULATOR_TYPE_ARC
-			    && i == RPMH_REGULATOR_REG_ARC_LEVEL)
-				pos += scnprintf(buf + pos, buflen - pos,
-					" (vlvl=%u)",
-					aggr_vreg->level[current_req->reg[i]]);
-		}
-	}
-
-	rpmh_reg_dbg("%s\n", buf);
-}
 
 struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
 
@@ -389,10 +258,6 @@ static void *rpmh_reg_ipc_log;
  * @valid:			Bitmask identifying which of the register values
  *				are valid/initialized
  */
-struct rpmh_regulator_request {
-	u32				reg[RPMH_REGULATOR_REG_MAX];
-	u32				valid;
-};
 
 /**
  * struct rpmh_regulator_mode - RPMh VRM mode attributes
@@ -463,6 +328,63 @@ struct rpmh_regulator_mode {
  * @aggr_req_sleep:		Aggregated sleep set RPMh accelerator register
  *				request
  */
+
+
+/**
+ * struct rpmh_vreg - individual rpmh regulator data structure encapsulating a
+ *		regulator framework regulator device and its corresponding
+ *		rpmh request
+ * @of_node:			Device node pointer for the individual rpmh
+ *				regulator
+ * @name:			Name of the regulator
+ * @rdesc:			Regulator descriptor
+ * @rdev:			Regulator device pointer returned by
+ *				devm_regulator_register()
+ * @aggr_vreg:			Pointer to the aggregated rpmh regulator
+ *				resource
+ * @set_active:			Boolean flag indicating that requests made by
+ *				this regulator should take affect in the active
+ *				set
+ * @set_sleep:			Boolean flag indicating that requests made by
+ *				this regulator should take affect in the sleep
+ *				set
+ * @req:			RPMh accelerator register request
+ * @mode_index:			RPMh VRM regulator mode selected by index into
+ *				aggr_vreg->mode
+ */
+
+#define RPMH_REGULATOR_MODE_COUNT		5
+
+#define RPMH_REGULATOR_MODE_PMIC4_LDO_RM	4
+#define RPMH_REGULATOR_MODE_PMIC4_LDO_LPM	5
+#define RPMH_REGULATOR_MODE_PMIC4_LDO_HPM	7
+
+#define RPMH_REGULATOR_MODE_PMIC4_SMPS_RM	4
+#define RPMH_REGULATOR_MODE_PMIC4_SMPS_PFM	5
+#define RPMH_REGULATOR_MODE_PMIC4_SMPS_AUTO	6
+#define RPMH_REGULATOR_MODE_PMIC4_SMPS_PWM	7
+
+#define RPMH_REGULATOR_MODE_PMIC4_BOB_PASS	0
+#define RPMH_REGULATOR_MODE_PMIC4_BOB_PFM	1
+#define RPMH_REGULATOR_MODE_PMIC4_BOB_AUTO	2
+#define RPMH_REGULATOR_MODE_PMIC4_BOB_PWM	3
+
+#define RPMH_REGULATOR_MODE_PMIC5_LDO_RM	3
+#define RPMH_REGULATOR_MODE_PMIC5_LDO_LPM	4
+#define RPMH_REGULATOR_MODE_PMIC5_LDO_HPM	7
+
+#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_RM	3
+#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_PFM	4
+#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_AUTO	6
+#define RPMH_REGULATOR_MODE_PMIC5_HFSMPS_PWM	7
+
+#define RPMH_REGULATOR_MODE_PMIC5_FTSMPS_RM	3
+#define RPMH_REGULATOR_MODE_PMIC5_FTSMPS_PWM	7
+
+#define RPMH_REGULATOR_MODE_PMIC5_BOB_PASS	2
+#define RPMH_REGULATOR_MODE_PMIC5_BOB_PFM	4
+#define RPMH_REGULATOR_MODE_PMIC5_BOB_AUTO	6
+#define RPMH_REGULATOR_MODE_PMIC5_BOB_PWM	7
 
 /*
  * Mappings from RPMh generic modes to VRM accelerator modes and regulator
@@ -692,6 +614,86 @@ static int rpmh_regulator_get_max_reg_index(struct rpmh_aggr_vreg *aggr_vreg)
  *
  * Return: none
  */
+static void rpmh_regulator_req(struct rpmh_vreg *vreg,
+		struct rpmh_regulator_request *current_req,
+		struct rpmh_regulator_request *prev_req,
+		u32 sent_mask,
+		enum rpmh_state state)
+{
+	struct rpmh_aggr_vreg *aggr_vreg = vreg->aggr_vreg;
+	char buf[DEBUG_PRINT_BUFFER_SIZE];
+	size_t buflen = DEBUG_PRINT_BUFFER_SIZE;
+	const char *const *param_name;
+	int i, max_reg_index;
+	int pos = 0;
+	u32 valid;
+	bool first;
+
+	switch (aggr_vreg->regulator_type) {
+	case RPMH_REGULATOR_TYPE_VRM:
+		max_reg_index = RPMH_REGULATOR_REG_VRM_MAX;
+		param_name = rpmh_regulator_vrm_param_names;
+		break;
+	case RPMH_REGULATOR_TYPE_ARC:
+		max_reg_index = RPMH_REGULATOR_REG_ARC_REAL_MAX;
+		param_name = rpmh_regulator_arc_param_names;
+		break;
+	case RPMH_REGULATOR_TYPE_XOB:
+		max_reg_index = RPMH_REGULATOR_REG_XOB_MAX;
+		param_name = rpmh_regulator_xob_param_names;
+		break;
+	case RPMH_REGULATOR_TYPE_PBS:
+		max_reg_index = RPMH_REGULATOR_REG_PBS_MAX;
+		param_name = rpmh_regulator_pbs_param_names;
+		break;
+	default:
+		return;
+	}
+
+	pos += scnprintf(buf + pos, buflen - pos,
+			"%s (%s), addr=0x%05X: s=%s; sent: ",
+			aggr_vreg->resource_name, vreg->rdesc.name,
+			aggr_vreg->addr, rpmh_regulator_state_names[state]);
+
+	valid = sent_mask;
+	first = true;
+	for (i = 0; i < max_reg_index; i++) {
+		if (valid & BIT(i)) {
+			pos += scnprintf(buf + pos, buflen - pos, "%s%s=%u",
+					(first ? "" : ", "), param_name[i],
+					current_req->reg[i]);
+			first = false;
+			if (aggr_vreg->regulator_type
+				== RPMH_REGULATOR_TYPE_ARC
+			    && i == RPMH_REGULATOR_REG_ARC_LEVEL)
+				pos += scnprintf(buf + pos, buflen - pos,
+					" (vlvl=%u)",
+					aggr_vreg->level[current_req->reg[i]]);
+		}
+	}
+
+	valid = prev_req->valid & ~sent_mask;
+
+	if (valid)
+		pos += scnprintf(buf + pos, buflen - pos, "; prev: ");
+	first = true;
+	for (i = 0; i < max_reg_index; i++) {
+		if (valid & BIT(i)) {
+			pos += scnprintf(buf + pos, buflen - pos, "%s%s=%u",
+					(first ? "" : ", "), param_name[i],
+					current_req->reg[i]);
+			first = false;
+			if (aggr_vreg->regulator_type
+				== RPMH_REGULATOR_TYPE_ARC
+			    && i == RPMH_REGULATOR_REG_ARC_LEVEL)
+				pos += scnprintf(buf + pos, buflen - pos,
+					" (vlvl=%u)",
+					aggr_vreg->level[current_req->reg[i]]);
+		}
+	}
+
+	rpmh_reg_dbg("%s\n", buf);
+}
 
 /**
  * rpmh_regulator_handle_arc_enable() - handle masking of the voltage level
