@@ -1186,7 +1186,7 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 
 	// 設定可能な範囲を 600mV～1V に制限
-	if (uv < 600000 || uv > 1000000)
+	if (uv < 500000 || uv > 1000000)
 		return -EINVAL;
 
 	// `rpmh_regulator` のデバイス情報を取得
@@ -1198,14 +1198,21 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
 	if (!vreg)
 		return -EINVAL;
 
+dev_info(dev, "Attempting to set CPU voltage to: %d uV\n", uv);
+
 	// 電圧設定を適用
 	mutex_lock(&vreg->aggr_vreg->lock);
 	cpu_uv_value = uv;
 	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
 	mutex_unlock(&vreg->aggr_vreg->lock);
-
-	if (rc)
+	
+	if (rc) {
+		dev_err(dev, "Failed to set CPU voltage: %d uV, rc=%d\n", uv, rc);
 		return rc;
+	}
+
+	// ==== 【変更点】電圧設定の成功をログに出力 ====
+	dev_info(dev, "CPU voltage successfully updated to: %d uV\n", uv);
 
 	return count;
 }
@@ -1252,29 +1259,43 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 
 	mv = DIV_ROUND_UP(min_uv, 1000);
 	if (mv * 1000 > max_uv) {
-		vreg_err(vreg, "no set points available in range %d-%d uV\n",
-			min_uv, max_uv);
+		vreg_err(vreg, "Invalid voltage range: %d-%d uV\n", min_uv, max_uv);
 		return -EINVAL;
 	}
 
+	// ==== 【変更点】電圧変更開始ログを追加 ====
+	vreg_info(vreg, "Setting CPU voltage to: %d mV\n", mv);
+
+	// ==== 【変更点】ロック処理を追加 ====
 	mutex_lock(&vreg->aggr_vreg->lock);
 
 	// 変更前の電圧を保存
 	prev_voltage = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
 	rpmh_regulator_check_param_max(vreg->aggr_vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
 
-	// 新しい電圧を RPMh に適用
+	// RPMh に電圧変更リクエストを送信
 	rc = rpmh_regulator_send_aggregate_requests(vreg);
+
+	// ==== 【変更点】エラーハンドリング強化 ====
 	if (rc) {
 		vreg_err(vreg, "Voltage setting failed: %d mV, rc=%d\n", mv, rc);
+		dev_err(vreg->aggr_vreg->dev, "Failed to send voltage request: %d mV, rc=%d\n", mv, rc);
+
+		// 失敗した場合、元の電圧に戻す
 		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, prev_voltage);
 	}
 
-	// ロックを解除
+	// ==== 【変更点】ロック解除 ====
 	mutex_unlock(&vreg->aggr_vreg->lock);
+
+	// ==== 【変更点】成功時のログ出力 ====
+	if (!rc) {
+		vreg_info(vreg, "CPU voltage successfully set to: %d mV\n", mv);
+	}
 
 	return rc;
 }
+
 
 /**
  * rpmh_regulator_vrm_get_voltage() - get the voltage of the VRM rpmh-regulator
