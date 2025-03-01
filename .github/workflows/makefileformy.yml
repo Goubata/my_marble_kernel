@@ -256,4 +256,4 @@ jobs:
             kernel/out/drivers/clk/qcom/clk-rpmh.ko
             kernel/out/drivers/soc/qcom/qcom_rpmh.ko
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
-            kernel/out/drivers/regulator/qcom-rpmh-regulator.ko
+            kernel/out/drivers/regulator/rpmh-regulator.ko
