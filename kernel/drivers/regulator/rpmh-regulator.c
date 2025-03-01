@@ -39,6 +39,13 @@ static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, ch
 	return sprintf(buf, "%d\n", cpu_uv_value);
 }
 
+struct rpmh_vreg;  // 前方宣言（incomplete type）
+struct rpmh_aggr_vreg;  // `aggr_vreg` にアクセスするために追加
+
+struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
+
+static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
+				int min_uv, int max_uv, unsigned int *selector)
 /*
  * sysfs で CPU の電圧を設定する関数
  * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
@@ -237,8 +244,6 @@ struct rpmh_regulator_mode {
 	u32				framework_mode;
 	int				min_load_ua;
 };
-
-struct rpmh_vreg;
 
 /**
  * struct rpmh_aggr_vreg - top level aggregated rpmh regulator resource data
