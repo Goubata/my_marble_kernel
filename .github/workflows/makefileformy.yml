@@ -3,10 +3,10 @@ name: Kernel Build Main From my phone
 on:
   push:
     branches:
-      - OC2
+      - UNDERVOLTHACK
   pull_request:
     branches:
-      - OC2
+      - UNDERVOLTHACK
   workflow_dispatch:
 
 jobs:
@@ -221,7 +221,7 @@ jobs:
       - name: リポジトリをチェックアウト
         uses: actions/checkout@v4
         with:
-          ref: OC2
+          ref: UNDERVOLTHACK
 
       - name: 必要なパッケージをインストール
         run: |
