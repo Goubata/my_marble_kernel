@@ -1179,49 +1179,47 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
  * sysfs で CPU の電圧を設定する関数
  * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
  */
-static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
-			    const char *buf, size_t count)
+static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	int uv, rc;
-	struct regulator_dev *rdev;
-	struct rpmh_vreg *vreg;
+    int uv, rc;
+    struct regulator_dev *rdev;
+    struct rpmh_vreg *vreg;
 
-	// 入力値を数値に変換
-	if (kstrtoint(buf, 10, &uv))
-		return -EINVAL;
+    if (kstrtoint(buf, 10, &uv))
+        return -EINVAL;
 
-	// 設定可能な範囲を 600mV～1V に制限
-	if (uv < 500000 || uv > 1000000)
-		return -EINVAL;
+    if (uv < 552000 || uv > 1000000)
+        return -EINVAL;
 
-	// `rpmh_regulator` のデバイス情報を取得
-	rdev = dev_get_drvdata(dev);
-	if (!rdev)
-		return -EINVAL;
+    rdev = dev_get_drvdata(dev);
+    if (!rdev) {
+        dev_err(dev, "cpu_uv_store: Failed to get regulator_dev\n");
+        return -EINVAL;
+    }
 
-	vreg = rdev_get_drvdata(rdev);
-	if (!vreg)
-		return -EINVAL;
+    vreg = dev_get_drvdata(dev);
+    if (!vreg) {
+        vreg = dev_get_drvdata(dev->parent); // 親デバイスから取得
+        if (!vreg) {
+            dev_err(dev, "cpu_uv_store: Failed to get vreg\n");
+            return -EINVAL;
+        }
+    }
 
-dev_info(dev, "Attempting to set CPU voltage to: %d uV\n", uv);
+    mutex_lock(&vreg->aggr_vreg->lock);
+    cpu_uv_value = uv;
+    dev_info(dev, "cpu_uv_store: Updated cpu_uv_value to: %d\n", cpu_uv_value);
+    rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
+    mutex_unlock(&vreg->aggr_vreg->lock);
 
-	// 電圧設定を適用
-	mutex_lock(&vreg->aggr_vreg->lock);
-	cpu_uv_value = uv;
-	dev_info(dev, "cpu_uv_store: Updated cpu_uv_value to: %d\n", cpu_uv_value); // デバッグログ追加
-	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
-	mutex_unlock(&vreg->aggr_vreg->lock);
-	
-	if (rc) {
-		dev_err(dev, "Failed to set CPU voltage: %d uV, rc=%d\n", uv, rc);
-		return rc;
-	}
+    if (rc) {
+        dev_err(dev, "Failed to set CPU voltage: %d uV, rc=%d\n", uv, rc);
+        return rc;
+    }
 
-	// ==== 【変更点】電圧設定の成功をログに出力 ====
-	dev_info(dev, "CPU voltage successfully updated to: %d uV\n", uv);
-
-	return count;
+    return count;
 }
+
 
 // `sysfs` で `cpu_uv` を操作できるようにする
 static DEVICE_ATTR(cpu_uv, 0664, cpu_uv_show, cpu_uv_store);
