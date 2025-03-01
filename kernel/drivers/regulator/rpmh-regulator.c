@@ -20,11 +20,68 @@
 #include <linux/regulator/machine.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/proxy-consumer.h>
+#include <linux/sysfs.h>
 
 #include <soc/qcom/cmd-db.h>
 #include <soc/qcom/rpmh.h>
 
 #include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
+
+// 現在の CPU の電圧 (初期値: 800mV)
+static int cpu_uv_value = 800000;
+
+/*
+ * sysfs で CPU の電圧を取得する関数
+ * cat /sys/devices/platform/rpmh-regulator/cpu_uv で現在の電圧を確認できる
+ */
+static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", cpu_uv_value);
+}
+
+/*
+ * sysfs で CPU の電圧を設定する関数
+ * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
+ */
+static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
+			    const char *buf, size_t count)
+{
+	int uv, rc;
+	struct regulator_dev *rdev;
+	struct rpmh_vreg *vreg;
+
+	// 入力値を数値に変換
+	if (kstrtoint(buf, 10, &uv))
+		return -EINVAL;
+
+	// 設定可能な範囲を 600mV～1V に制限
+	if (uv < 600000 || uv > 1000000)
+		return -EINVAL;
+
+	// `rpmh_regulator` のデバイス情報を取得
+	rdev = dev_get_drvdata(dev);
+	if (!rdev)
+		return -EINVAL;
+
+	vreg = rdev_get_drvdata(rdev);
+	if (!vreg)
+		return -EINVAL;
+
+	// 電圧設定を適用
+	mutex_lock(&vreg->aggr_vreg->lock);
+	cpu_uv_value = uv;
+	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
+	mutex_unlock(&vreg->aggr_vreg->lock);
+
+	if (rc)
+		return rc;
+
+	return count;
+}
+
+// `sysfs` で `cpu_uv` を操作できるようにする
+static DEVICE_ATTR_RW(cpu_uv);
+
 
 /**
  * enum rpmh_regulator_type - supported RPMh accelerator types
@@ -1198,21 +1255,22 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 
 	mutex_lock(&vreg->aggr_vreg->lock);
 
-	prev_voltage
-	     = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
-	rpmh_regulator_check_param_max(vreg->aggr_vreg,
-				RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
+	// 変更前の電圧を保存
+	prev_voltage = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
+	rpmh_regulator_check_param_max(vreg->aggr_vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
 
+	// 新しい電圧を RPMh に適用
 	rc = rpmh_regulator_send_aggregate_requests(vreg);
 	if (rc) {
-		vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", mv, rc);
-		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
-					prev_voltage);
+		vreg_err(vreg, "Voltage setting failed: %d mV, rc=%d\n", mv, rc);
+		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, prev_voltage);
 	}
 
+	// ロックを解除
 	mutex_unlock(&vreg->aggr_vreg->lock);
 
 	return rc;
+}
 }
 
 /**
@@ -2215,6 +2273,10 @@ static int rpmh_regulator_probe(struct platform_device *pdev)
 		}
 		mutex_unlock(&aggr_vreg->lock);
 	}
+
+		rc = device_create_file(&pdev->dev, &dev_attr_cpu_uv);
+	if (rc)
+		dev_err(dev, "Failed to create sysfs entry for CPU UV\n");
 
 	of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
 	platform_set_drvdata(pdev, aggr_vreg);
