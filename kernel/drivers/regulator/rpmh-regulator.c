@@ -39,107 +39,11 @@ static ssize_t cpu_uv_show(struct device *dev, struct device_attribute *attr, ch
 	return sprintf(buf, "%d\n", cpu_uv_value);
 }
 
-struct rpmh_vreg {
-	struct device_node		*of_node;
-	struct regulator_desc		rdesc;
-	struct regulator_dev		*rdev;
-	struct rpmh_aggr_vreg		*aggr_vreg;
-	bool				set_active;
-	bool				set_sleep;
-	struct rpmh_regulator_request	req;
-	int				mode_index;
-};
-
-struct rpmh_aggr_vreg {
-	struct device			*dev;
-	const char			*resource_name;
-	u32				addr;
-	struct mutex			lock;
-	enum rpmh_regulator_type	regulator_type;
-	enum rpmh_regulator_hw_type	regulator_hw_type;
-	u32				level[RPMH_ARC_MAX_LEVELS];
-	int				level_count;
-	bool				always_wait_for_ack;
-	bool				next_wait_for_ack;
-	bool				sleep_request_sent;
-	bool				enable_regulator_deepsleep;
-	struct rpmh_vreg		*vreg;
-	int				vreg_count;
-	struct rpmh_regulator_mode	*mode;
-	int				mode_count;
-	int				disable_pmic_mode;
-	struct rpmh_regulator_request	aggr_req_active;
-	struct rpmh_regulator_request	aggr_req_sleep;
-};
-
-struct rpmh_regulator_request {
-	u32				reg[RPMH_REGULATOR_REG_MAX];
-	u32				valid;
-};
-
 struct regulator_dev;  // `rdev_get_drvdata()` を扱うため
 
 static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 				int min_uv, int max_uv, unsigned int *selector);
-/*
- * sysfs で CPU の電圧を設定する関数
- * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
- */
-static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
-			    const char *buf, size_t count)
-{
-	int uv, rc;
-	struct regulator_dev *rdev;
-	struct rpmh_vreg *vreg;
-
-	// 入力値を数値に変換
-	if (kstrtoint(buf, 10, &uv))
-		return -EINVAL;
-
-	// 設定可能な範囲を 600mV～1V に制限
-	if (uv < 600000 || uv > 1000000)
-		return -EINVAL;
-
-	// `rpmh_regulator` のデバイス情報を取得
-	rdev = dev_get_drvdata(dev);
-	if (!rdev)
-		return -EINVAL;
-
-	vreg = rdev_get_drvdata(rdev);
-	if (!vreg)
-		return -EINVAL;
-
-	// 電圧設定を適用
-	mutex_lock(&vreg->aggr_vreg->lock);
-	cpu_uv_value = uv;
-	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
-	mutex_unlock(&vreg->aggr_vreg->lock);
-
-	if (rc)
-		return rc;
-
-	return count;
-}
-
-// `sysfs` で `cpu_uv` を操作できるようにする
-static DEVICE_ATTR_RW(cpu_uv);
-
-
-/**
- * enum rpmh_regulator_type - supported RPMh accelerator types
- * %RPMH_REGULATOR_TYPE_VRM:	RPMh VRM accelerator which supports voting on
- *				enable, voltage, mode, and headroom voltage of
- *				LDO, SMPS, VS, and BOB type PMIC regulators.
- * %RPMH_REGULATOR_TYPE_ARC:	RPMh ARC accelerator which supports voting on
- *				the CPR managed voltage level of LDO and SMPS
- *				type PMIC regulators.
- * %RPMH_REGULATOR_TYPE_XOB:	RPMh XOB accelerator which supports voting on
- *				the enable state of PMIC regulators.
- * %RPMH_REGULATOR_TYPE_PBS:	RPMh PBS accelerator which supports voting on
- *				the enable state of PBS resources, which are
- *				used to trigger PBS sequences for HW controlled
- *				regulator enable states.
- */
+				
 enum rpmh_regulator_type {
 	RPMH_REGULATOR_TYPE_VRM,
 	RPMH_REGULATOR_TYPE_ARC,
@@ -258,6 +162,10 @@ static void *rpmh_reg_ipc_log;
  * @valid:			Bitmask identifying which of the register values
  *				are valid/initialized
  */
+struct rpmh_regulator_request {
+	u32				reg[RPMH_REGULATOR_REG_MAX];
+	u32				valid;
+};
 
 /**
  * struct rpmh_regulator_mode - RPMh VRM mode attributes
@@ -328,7 +236,27 @@ struct rpmh_regulator_mode {
  * @aggr_req_sleep:		Aggregated sleep set RPMh accelerator register
  *				request
  */
-
+struct rpmh_aggr_vreg {
+	struct device			*dev;
+	const char			*resource_name;
+	u32				addr;
+	struct mutex			lock;
+	enum rpmh_regulator_type	regulator_type;
+	enum rpmh_regulator_hw_type	regulator_hw_type;
+	u32				level[RPMH_ARC_MAX_LEVELS];
+	int				level_count;
+	bool				always_wait_for_ack;
+	bool				next_wait_for_ack;
+	bool				sleep_request_sent;
+	bool				enable_regulator_deepsleep;
+	struct rpmh_vreg		*vreg;
+	int				vreg_count;
+	struct rpmh_regulator_mode	*mode;
+	int				mode_count;
+	int				disable_pmic_mode;
+	struct rpmh_regulator_request	aggr_req_active;
+	struct rpmh_regulator_request	aggr_req_sleep;
+};
 
 /**
  * struct rpmh_vreg - individual rpmh regulator data structure encapsulating a
@@ -352,6 +280,16 @@ struct rpmh_regulator_mode {
  * @mode_index:			RPMh VRM regulator mode selected by index into
  *				aggr_vreg->mode
  */
+struct rpmh_vreg {
+	struct device_node		*of_node;
+	struct regulator_desc		rdesc;
+	struct regulator_dev		*rdev;
+	struct rpmh_aggr_vreg		*aggr_vreg;
+	bool				set_active;
+	bool				set_sleep;
+	struct rpmh_regulator_request	req;
+	int				mode_index;
+};
 
 #define RPMH_REGULATOR_MODE_COUNT		5
 
@@ -1231,6 +1169,66 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
 
 	return rc;
 }
+
+/*
+ * sysfs で CPU の電圧を設定する関数
+ * echo 750000 > /sys/devices/platform/rpmh-regulator/cpu_uv で 750mV に変更できる
+ */
+static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr,
+			    const char *buf, size_t count)
+{
+	int uv, rc;
+	struct regulator_dev *rdev;
+	struct rpmh_vreg *vreg;
+
+	// 入力値を数値に変換
+	if (kstrtoint(buf, 10, &uv))
+		return -EINVAL;
+
+	// 設定可能な範囲を 600mV～1V に制限
+	if (uv < 600000 || uv > 1000000)
+		return -EINVAL;
+
+	// `rpmh_regulator` のデバイス情報を取得
+	rdev = dev_get_drvdata(dev);
+	if (!rdev)
+		return -EINVAL;
+
+	vreg = rdev_get_drvdata(rdev);
+	if (!vreg)
+		return -EINVAL;
+
+	// 電圧設定を適用
+	mutex_lock(&vreg->aggr_vreg->lock);
+	cpu_uv_value = uv;
+	rc = rpmh_regulator_vrm_set_voltage(rdev, uv, uv, NULL);
+	mutex_unlock(&vreg->aggr_vreg->lock);
+
+	if (rc)
+		return rc;
+
+	return count;
+}
+
+// `sysfs` で `cpu_uv` を操作できるようにする
+static DEVICE_ATTR_RW(cpu_uv);
+
+
+/**
+ * enum rpmh_regulator_type - supported RPMh accelerator types
+ * %RPMH_REGULATOR_TYPE_VRM:	RPMh VRM accelerator which supports voting on
+ *				enable, voltage, mode, and headroom voltage of
+ *				LDO, SMPS, VS, and BOB type PMIC regulators.
+ * %RPMH_REGULATOR_TYPE_ARC:	RPMh ARC accelerator which supports voting on
+ *				the CPR managed voltage level of LDO and SMPS
+ *				type PMIC regulators.
+ * %RPMH_REGULATOR_TYPE_XOB:	RPMh XOB accelerator which supports voting on
+ *				the enable state of PMIC regulators.
+ * %RPMH_REGULATOR_TYPE_PBS:	RPMh PBS accelerator which supports voting on
+ *				the enable state of PBS resources, which are
+ *				used to trigger PBS sequences for HW controlled
+ *				regulator enable states.
+ */
 
 /**
  * rpmh_regulator_vrm_set_voltage() - set the voltage of the VRM rpmh-regulator
