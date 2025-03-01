@@ -1188,7 +1188,7 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr, c
     if (kstrtoint(buf, 10, &uv))
         return -EINVAL;
 
-    if (uv < 552000 || uv > 1000000)
+    if (uv < 552000 || uv > 1100000)
         return -EINVAL;
 
     rdev = dev_get_drvdata(dev);
@@ -1197,13 +1197,10 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr, c
         return -EINVAL;
     }
 
-    vreg = dev_get_drvdata(dev);
+    vreg = rdev_get_drvdata(rdev); // 修正ポイント
     if (!vreg) {
-        vreg = dev_get_drvdata(dev->parent); // 親デバイスから取得
-        if (!vreg) {
-            dev_err(dev, "cpu_uv_store: Failed to get vreg\n");
-            return -EINVAL;
-        }
+        dev_err(dev, "cpu_uv_store: Failed to get vreg\n");
+        return -EINVAL;
     }
 
     mutex_lock(&vreg->aggr_vreg->lock);
@@ -1219,6 +1216,7 @@ static ssize_t cpu_uv_store(struct device *dev, struct device_attribute *attr, c
 
     return count;
 }
+
 
 
 // `sysfs` で `cpu_uv` を操作できるようにする
