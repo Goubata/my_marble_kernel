@@ -6,12 +6,12 @@
 #include <linux/bitfield.h>
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
+#include <linux/energy_model.h>
+#include <linux/init.h>
 #include <linux/device.h>   // デバイス関連の API (sysfs 含む)
 #include <linux/sysfs.h>    // sysfs 操作 (`device_create_file()` など)
 #include <linux/fs.h>       // ファイルシステム関連 (`device_create_file()` で必要)
 #include <linux/uaccess.h>  // ユーザー空間データの処理 (`kstrtoul()` で必要)
-#include <linux/energy_model.h>
-#include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -269,10 +269,21 @@ static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *att
 {
     struct cpufreq_qcom *c = dev_get_drvdata(dev);
     u32 volt;
-    if (!c || !c->base)
-        return -ENODEV;
 
-    volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);  // 現在の電圧取得
+    if (!c) {
+        pr_err("cpu_voltage_show: cpufreq_qcom struct is NULL\n");
+        return -ENODEV;
+    }
+
+    if (!c->base) {
+        pr_err("cpu_voltage_show: c->base is NULL\n");
+        return -ENODEV;
+    }
+
+    pr_info("cpu_voltage_show: REG_VOLT_LUT offset = 0x%x\n", offsets[REG_VOLT_LUT]);
+    
+    volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
+    pr_info("cpu_voltage_show: Read voltage = %u\n", volt);
     return scnprintf(buf, PAGE_SIZE, "%u\n", volt);
 }
 
@@ -404,7 +415,6 @@ static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 		device_create_file(cpu_dev, &c->freq_limit_attr);
 	}
 
-	/* 追加: 電圧制御用の sysfs エントリを作成 */
 	ret = device_create_file(cpu_dev, &dev_attr_cpu_voltage);
 	if (ret)
 		dev_err(cpu_dev, "Failed to create voltage sysfs entry for CPU%d\n", policy->cpu);
