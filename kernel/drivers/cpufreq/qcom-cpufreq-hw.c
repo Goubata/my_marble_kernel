@@ -311,63 +311,61 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
         return -ENODEV;
     }
 
-    // `vreg` の取得
     vreg = c->vreg;
     if (!vreg) {
         pr_err("cpu_voltage_store: vreg is NULL, cannot update voltage\n");
         return -ENODEV;
     }
 
-    // 入力値を整数に変換
     ret = kstrtoul(buf, 10, &new_volt);
-    if (ret)
+    if (ret) {
+        pr_err("cpu_voltage_store: Failed to parse voltage value: %s\n", buf);
         return ret;
+    }
 
-    // 電圧の範囲チェック
     if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE) {
         pr_err("cpu_voltage_store: Voltage out of range: %lu\n", new_volt);
         return -EINVAL;
     }
 
-    // 現在の電圧を取得
     current_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
     pr_info("cpu_voltage_store: Current voltage = %u, New voltage = %lu\n", current_volt, new_volt);
 
-    // 変更が不要ならスキップ
     if (current_volt == new_volt) {
         pr_info("cpu_voltage_store: Voltage is already %lu, skipping update\n", new_volt);
         return count;
     }
 
-    // 新しい電圧を設定
-    pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
+    pr_info("cpu_voltage_store: Writing voltage: %lu\n", new_volt);
     writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
-    mb();  // メモリバリアで同期
+    mb();  // メモリバリア
 
-    // 変更が適用されるまで待機
     retries = 10;
     while (retries--) {
-        msleep(1);  // 1ms 待つ
+        msleep(1);
         check_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
 
-        if (check_volt == new_volt)
+        if (check_volt == new_volt) {
+            pr_info("cpu_voltage_store: Voltage successfully updated to %u\n", check_volt);
             break;
+        }
     }
 
     if (retries == 0) {
         pr_err("cpu_voltage_store: Voltage change did not take effect! Expected: %lu, Read: %u\n", new_volt, check_volt);
-        return -EIO;  // 異常な場合はエラーを返して処理を中断
+        return -EIO;
     }
 
-    // RPMh に電圧変更を通知
     pr_info("cpu_voltage_store: Calling rpmh_regulator_send_aggregate_requests\n");
     rpmh_regulator_send_aggregate_requests(vreg);
 
-    // CPU の周波数と電圧を同期させる
     cpufreq_update_policy(cpumask_first(&c->related_cpus));
+
+    pr_info("cpu_voltage_store: Voltage update completed\n");
 
     return count;
 }
+
 
 
 static DEVICE_ATTR_RW(cpu_voltage);
