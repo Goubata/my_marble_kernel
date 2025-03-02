@@ -800,6 +800,7 @@ static void rpmh_regulator_reorder_cmds(struct rpmh_aggr_vreg *aggr_vreg,
 static int rpmh_regulator_send_aggregate_requests(struct rpmh_aggr_vreg *aggr_vreg)
 {
     struct rpmh_vreg *vreg;
+    int ret = 0;
 
     if (!aggr_vreg) {
         pr_err("rpmh_regulator_send_aggregate_requests: aggr_vreg is NULL\n");
@@ -812,6 +813,8 @@ static int rpmh_regulator_send_aggregate_requests(struct rpmh_aggr_vreg *aggr_vr
         return -EINVAL;
     }
 
+    pr_info("rpmh_regulator_send_aggregate_requests: Processing requests\n");
+
     for (int i = 0; i < RPMH_REGULATOR_REG_MAX; i++) {
         if (!(aggr_vreg->sent_mask & BIT(i)))
             continue;
@@ -821,16 +824,27 @@ static int rpmh_regulator_send_aggregate_requests(struct rpmh_aggr_vreg *aggr_vr
             return -ERANGE;
         }
 
-        pr_info("Writing to addr 0x%x, data 0x%x\n",
-                aggr_vreg->cmd[i].addr, aggr_vreg->cmd[i].data);
+        pr_info("Writing to addr 0x%x, data 0x%x (state=%d)\n",
+                aggr_vreg->cmd[i].addr, aggr_vreg->cmd[i].data, CMD_SET);
 
-        int ret = rpmh_write(vreg->dev, CMD_SET, aggr_vreg->cmd[i].addr,
-                             aggr_vreg->cmd[i].data);
-        if (ret)
+        ret = rpmh_write(vreg->dev, CMD_SET, aggr_vreg->cmd[i].addr,
+                         aggr_vreg->cmd[i].data);
+        if (ret) {
+            pr_err("rpmh_regulator_send_aggregate_requests: rpmh_write failed (addr=0x%x, data=0x%x, ret=%d)\n",
+                   aggr_vreg->cmd[i].addr, aggr_vreg->cmd[i].data, ret);
             return ret;
+        }
+
+        // 🔹 Active状態の電圧リクエストを記録 (重要)
+        aggr_vreg->aggr_req_active.reg[i] = aggr_vreg->cmd[i].data;
+        aggr_vreg->aggr_req_active.valid |= BIT(i);
     }
+
+    pr_info("rpmh_regulator_send_aggregate_requests: Request completed successfully\n");
+
     return 0;
 }
+
 
 
 	mutex_lock(&aggr_vreg->lock);
