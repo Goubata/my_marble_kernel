@@ -817,28 +817,50 @@ static int qcom_resources_init(struct platform_device *pdev)
 
 static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 {
-	int rc, cpu;
+    int rc, cpu;
+    struct cpufreq_qcom *c;
+    struct device *dev = &pdev->dev;
 
-	/* Get the bases of cpufreq for domains */
-	rc = qcom_resources_init(pdev);
-	if (rc) {
-		dev_err(&pdev->dev, "CPUFreq resource init failed\n");
-		return rc;
-	}
+    pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
 
-	for_each_possible_cpu(cpu)
-		spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
+    /* CPUFreq のリソースを初期化 */
+    rc = qcom_resources_init(pdev);
+    if (rc) {
+        dev_err(&pdev->dev, "CPUFreq resource init failed\n");
+        return rc;
+    }
 
-	rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
-	if (rc) {
-		dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
-		return rc;
-	}
+    /* メモリ確保 */
+    c = devm_kzalloc(dev, sizeof(*c), GFP_KERNEL);
+    if (!c)
+        return -ENOMEM;
 
-	of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
-	dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
+    /* `vreg` を取得 */
+    c->vreg = devm_regulator_get(dev, "cpu");
+    if (IS_ERR(c->vreg)) {
+        dev_err(&pdev->dev, "Failed to get CPU regulator\n");
+        return PTR_ERR(c->vreg);
+    }
+    pr_info("qcom_cpufreq_hw_driver_probe: Successfully got CPU regulator\n");
 
-	return 0;
+    /* ドライバデータをセット */
+    platform_set_drvdata(pdev, c);
+
+    /* CPUごとのスピンロックを初期化 */
+    for_each_possible_cpu(cpu)
+        spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
+
+    /* CPUFreq ドライバを登録 */
+    rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
+    if (rc) {
+        dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
+        return rc;
+    }
+
+    of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+    dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
+
+    return 0;
 }
 
 static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
