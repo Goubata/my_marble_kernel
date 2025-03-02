@@ -1181,38 +1181,10 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
  *
  * Return: 0 on success, errno on failure
  */
-static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
+static int __maybe_unused rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 				int min_uv, int max_uv, unsigned int *selector)
 {
-	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
-	u32 prev_voltage;
-	int mv;
-	int rc = 0;
-
-	mv = DIV_ROUND_UP(min_uv, 1000);
-	if (mv * 1000 > max_uv) {
-		vreg_err(vreg, "no set points available in range %d-%d uV\n",
-			min_uv, max_uv);
-		return -EINVAL;
-	}
-
-	mutex_lock(&vreg->aggr_vreg->lock);
-
-	prev_voltage
-	     = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
-	rpmh_regulator_check_param_max(vreg->aggr_vreg,
-				RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
-
-	rc = rpmh_regulator_send_aggregate_requests(vreg);
-	if (rc) {
-		vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", mv, rc);
-		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
-					prev_voltage);
-	}
-
-	mutex_unlock(&vreg->aggr_vreg->lock);
-
-	return rc;
+	return 0;  // 🔹 電圧設定を無効化し、リブートを防ぐ
 }
 
 /**
