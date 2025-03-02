@@ -255,3 +255,5 @@ jobs:
           path: |
             kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
+            kernel/out/drivers/thermal/qcom/cpu_voltage_cooling.ko
+            kernel/out/drivers/regulator/qcom-rpmh-regulator.ko
