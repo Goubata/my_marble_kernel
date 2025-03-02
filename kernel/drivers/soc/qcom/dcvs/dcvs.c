@@ -284,14 +284,14 @@ static u32 get_target_freq(struct dcvs_path *path, u32 freq)
 }
 
 /* slow path update: does aggregation across multiple clients */
-static int qcom_dcvs_sp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
+static int __maybe_unused qcom_dcvs_sp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
     return 0;  // 🔹 DCVS の影響を完全に排除
 }
 
 
 /* fast path update: only single client allowed so lockless */
-static int qcom_dcvs_fp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
+static int __maybe_unused qcom_dcvs_fp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
     return 0;
 }
@@ -301,13 +301,13 @@ static int qcom_dcvs_fp_update(const char *name, struct dcvs_freq *votes, u32 up
  * percpu path update: only single client per cpu allowed so lockless.
  * Also note that client is responsible for disabling preemption
  */
-static int qcom_dcvs_percpu_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
+static int __maybe_unused qcom_dcvs_percpu_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
     return 0;
 }
 
 
-int qcom_dcvs_update_votes(const char *name, struct dcvs_freq *votes,
+int  __maybe_unused qcom_dcvs_update_votes(const char *name, struct dcvs_freq *votes,
                            u32 update_mask, enum dcvs_path_type path)
 {
     return 0;  // 🔹 DCVS の投票システムを完全に無効化
