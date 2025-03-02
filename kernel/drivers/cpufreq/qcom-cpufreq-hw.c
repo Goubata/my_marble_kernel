@@ -8,6 +8,7 @@
 #include <linux/cpu_cooling.h>
 #include <linux/energy_model.h>
 #include <linux/delay.h>
+#include <linux/regulator/consumer.h>  // ← 追加！
 #include <linux/regulator/rpmh-regulator.h>
 #include <linux/init.h>
 #include <linux/device.h>   // デバイス関連の API (sysfs 含む)
@@ -820,6 +821,7 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     int rc, cpu;
     struct cpufreq_qcom *c;
     struct device *dev = &pdev->dev;
+    struct regulator *vreg;  // ← 修正！
 
     pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
 
@@ -836,12 +838,14 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
         return -ENOMEM;
 
     /* `vreg` を取得 */
-    c->vreg = devm_regulator_get(dev, "cpu");
-    if (IS_ERR(c->vreg)) {
+    vreg = devm_regulator_get(dev, "cpu");  // ← 型を修正！
+    if (IS_ERR(vreg)) {
         dev_err(&pdev->dev, "Failed to get CPU regulator\n");
-        return PTR_ERR(c->vreg);
+        return PTR_ERR(vreg);
     }
     pr_info("qcom_cpufreq_hw_driver_probe: Successfully got CPU regulator\n");
+
+    c->vreg = vreg;  // ← `struct regulator *` を代入
 
     /* ドライバデータをセット */
     platform_set_drvdata(pdev, c);
