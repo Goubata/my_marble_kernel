@@ -32,8 +32,8 @@
 #include <trace/events/dcvsh.h>
 
 #define LUT_MAX_ENTRIES			40U
-#define MIN_VOLTAGE			400
-#define MAX_VOLTAGE			1200
+#define MIN_VOLTAGE			400000
+#define MAX_VOLTAGE			1200000
 #define LUT_SRC				GENMASK(31, 30)
 #define LUT_L_VAL			GENMASK(7, 0)
 #define LUT_CORE_COUNT			GENMASK(18, 16)
@@ -294,8 +294,10 @@ static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *att
 static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
     struct cpufreq_qcom *c = dev_get_drvdata(dev);
+    struct rpmh_vreg *vreg;
     unsigned long new_volt;
-    int ret;
+    int ret, retries;
+    u32 current_volt, check_volt;
 
     pr_info("cpu_voltage_store: Function called\n");
 
@@ -309,17 +311,60 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
         return -ENODEV;
     }
 
+    // `vreg` の取得
+    vreg = c->vreg;
+    if (!vreg) {
+        pr_err("cpu_voltage_store: vreg is NULL, cannot update voltage\n");
+        return -ENODEV;
+    }
+
+    // 入力値を整数に変換
     ret = kstrtoul(buf, 10, &new_volt);
     if (ret)
         return ret;
 
+    // 電圧の範囲チェック
     if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE) {
         pr_err("cpu_voltage_store: Voltage out of range: %lu\n", new_volt);
         return -EINVAL;
     }
 
+    // 現在の電圧を取得
+    current_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
+    pr_info("cpu_voltage_store: Current voltage = %u, New voltage = %lu\n", current_volt, new_volt);
+
+    // 変更が不要ならスキップ
+    if (current_volt == new_volt) {
+        pr_info("cpu_voltage_store: Voltage is already %lu, skipping update\n", new_volt);
+        return count;
+    }
+
+    // 新しい電圧を設定
     pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
     writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
+    mb();  // メモリバリアで同期
+
+    // 変更が適用されるまで待機
+    retries = 10;
+    while (retries--) {
+        msleep(1);  // 1ms 待つ
+        check_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
+
+        if (check_volt == new_volt)
+            break;
+    }
+
+    if (retries == 0) {
+        pr_err("cpu_voltage_store: Voltage change did not take effect! Expected: %lu, Read: %u\n", new_volt, check_volt);
+        return -EIO;  // 異常な場合はエラーを返して処理を中断
+    }
+
+    // RPMh に電圧変更を通知
+    pr_info("cpu_voltage_store: Calling rpmh_regulator_send_aggregate_requests\n");
+    rpmh_regulator_send_aggregate_requests(vreg);
+
+    // CPU の周波数と電圧を同期させる
+    cpufreq_update_policy(cpumask_first(&c->related_cpus));
 
     return count;
 }
@@ -592,10 +637,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 			c->table[i++].frequency = 2323200;
 		} else if (cpu == 4) {
 			c->table[i++].frequency = 2500000;
-			c->table[i++].frequency = 2572800;
-			c->table[i++].frequency = 2649600;
-			c->table[i++].frequency = 2745600;
-			c->table[i++].frequency = 2865600;
 		} else if (cpu == 7) {
 			c->table[i++].frequency = 3000000;
 			c->table[i++].frequency = 3200200;
