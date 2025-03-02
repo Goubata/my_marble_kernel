@@ -1086,7 +1086,8 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 	u32 prev_voltage;
 	int mv;
 	int rc = 0;
-
+	
+	pr_info("rpmh_regulator_vrm_set_voltage called: min_uV=%d, max_uV=%d\n", min_uV, max_uV);
 	mv = DIV_ROUND_UP(min_uv, 1000);
 	if (mv * 1000 > max_uv) {
 		vreg_err(vreg, "no set points available in range %d-%d uV\n",
