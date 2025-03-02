@@ -638,6 +638,10 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 			c->table[i++].frequency = 2323200;
 		} else if (cpu == 4) {
 			c->table[i++].frequency = 2500000;
+			c->table[i++].frequency = 2572800;
+			c->table[i++].frequency = 2649600;
+			c->table[i++].frequency = 2745600;
+			c->table[i++].frequency = 2865600;
 		} else if (cpu == 7) {
 			c->table[i++].frequency = 3000000;
 			c->table[i++].frequency = 3200200;
