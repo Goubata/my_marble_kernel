@@ -898,7 +898,7 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 				!= req_active.reg[i] || resend_active)) {
 			cmd[j].addr = aggr_vreg->addr + i * 4;
 			cmd[j].data = req_active.reg[i];
-			cmd[j].wait = tr
+			cmd[j].wait = true;
 			pr_info("rpmh_regulator_send_aggregate_requests: Active cmd[%d] addr=0x%x, data=0x%x\n",
         j, cmd[j].addr, cmd[j].data);
 );
@@ -917,7 +917,7 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 	}
 
 	/* Send the rpmh command if any register values differ. */
-	if (j > 0
+	if (j > 0) {
 		pr_info("rpmh_regulator_send_aggregate_requests: Sending %d active state commands\n", j);j);
 		rpmh_regulator_reorder_cmds(aggr_vreg, cmd, j);
 
