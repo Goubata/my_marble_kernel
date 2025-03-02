@@ -324,8 +324,11 @@ static int qcom_dcvs_sp_update(const char *name, struct dcvs_freq *votes,
 		}
 		new_freq.ib = get_target_freq(path, new_freq.ib);
 		if (new_freq.ib != path->cur_freq.ib ||
-					new_freq.ab != path->cur_freq.ab)
-			ret = path->commit_dcvs_freqs(path, &new_freq, 1);
+    new_freq.ab != path->cur_freq.ab) {
+    pr_info("commit_dcvs_freqs: Skipped frequency update (ib=%u, ab=%u)\n",
+            new_freq.ib, new_freq.ab);
+    // ret = path->commit_dcvs_freqs(path, &new_freq, 1);  // 🔹 無効化
+}
 		mutex_unlock(&path->voter_lock);
 		if (ret < 0)
 			return ret;
@@ -429,20 +432,12 @@ static int qcom_dcvs_percpu_update(const char *name, struct dcvs_freq *votes,
 int qcom_dcvs_update_votes(const char *name, struct dcvs_freq *votes,
 				u32 update_mask, enum dcvs_path_type path)
 {
-	switch (path) {
-	case DCVS_SLOW_PATH:
-		return qcom_dcvs_sp_update(name, votes, update_mask);
-	case DCVS_FAST_PATH:
-		return qcom_dcvs_fp_update(name, votes, update_mask);
-	case DCVS_PERCPU_PATH:
-		return qcom_dcvs_percpu_update(name, votes, update_mask);
-	default:
-		break;
-	}
-
-	return -EINVAL;
+	pr_info("qcom_dcvs_update_votes: DCVS update blocked (name=%s, update_mask=0x%x)\n",
+			name, update_mask);
+	return 0;  // 🔹 DCVS の周波数変更をブロック
 }
 EXPORT_SYMBOL(qcom_dcvs_update_votes);
+
 
 int qcom_dcvs_register_voter(const char *name, enum dcvs_hw_type hw_type,
 				enum dcvs_path_type path_type)
