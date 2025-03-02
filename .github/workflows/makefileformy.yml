@@ -253,5 +253,5 @@ jobs:
         with:
           name: kernel-build-Main
           path: |
-            kernel/out/arch/arm64/boot/Image.gz
             kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
+            kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
