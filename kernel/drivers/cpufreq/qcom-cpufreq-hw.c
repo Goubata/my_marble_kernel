@@ -296,6 +296,7 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
     struct cpufreq_qcom *c = dev_get_drvdata(dev);
     unsigned long new_volt;
     int ret;
+    u32 readback_volt;
 
     pr_info("cpu_voltage_store: Function called\n");
 
@@ -318,14 +319,19 @@ static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *at
         return -EINVAL;
     }
 
-    pr_info("cpu_voltage_store: Setting CPU voltage: %lu\n", new_volt);
+    pr_info("cpu_voltage_store: Writing voltage = %lu to REG_VOLT_LUT (offset = 0x%x)\n",
+            new_volt, offsets[REG_VOLT_LUT]);
+
     writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
-    
+
+    msleep(100);  // 🔹 変更が適用されるまで待つ
+
     u32 readback_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
-    pr_info("cpu_voltage_store: Read-back voltage from REG_VOLT_LUT = %u\n", readback_volt);
-    
+    pr_info("cpu_voltage_store: Read-back voltage = %u (Expected = %lu)\n", readback_volt, new_volt);
+
     return count;
 }
+
 
 
 static DEVICE_ATTR_RW(cpu_voltage);
