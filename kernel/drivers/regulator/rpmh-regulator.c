@@ -797,157 +797,41 @@ static void rpmh_regulator_reorder_cmds(struct rpmh_aggr_vreg *aggr_vreg,
  *
  * Return: 0 on success, errno on failure
  */
-static int
-rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
+static int rpmh_regulator_send_aggregate_requests(struct rpmh_aggr_vreg *aggr_vreg)
 {
-	struct rpmh_aggr_vreg *aggr_vreg = vreg->aggr_vreg;
-	struct rpmh_regulator_request req_active = { {0} };
-	struct rpmh_regulator_request req_sleep = { {0} };
-	struct tcs_cmd cmd[RPMH_REGULATOR_REG_MAX] = { {0} };
-	bool sleep_set_differs = aggr_vreg->sleep_request_sent;
-	bool wait_for_ack = aggr_vreg->always_wait_for_ack
-				|| aggr_vreg->next_wait_for_ack;
-	bool resend_active = false;
-	int i, j, max_reg_index, rc;
-	enum rpmh_state state;
-	u32 sent_mask;
+    struct rpmh_vreg *vreg;
 
-	max_reg_index = rpmh_regulator_get_max_reg_index(aggr_vreg);
+    if (!aggr_vreg) {
+        pr_err("rpmh_regulator_send_aggregate_requests: aggr_vreg is NULL\n");
+        return -EINVAL;
+    }
 
-	rpmh_regulator_aggregate_requests(aggr_vreg, &req_active, &req_sleep);
+    vreg = aggr_vreg->vreg;
+    if (!vreg) {
+        pr_err("rpmh_regulator_send_aggregate_requests: vreg is NULL\n");
+        return -EINVAL;
+    }
 
-	/*
-	 * Check if the aggregated sleep set parameter values differ from the
-	 * aggregated active set parameter values.
-	 */
-	if (!aggr_vreg->sleep_request_sent) {
-		for (i = 0; i < max_reg_index; i++) {
-			if ((req_active.reg[i] != req_sleep.reg[i])
-			    && (req_sleep.valid & BIT(i))) {
-				sleep_set_differs = true;
-				/*
-				 * Resend full active set request so that
-				 * all parameters are specified in the wake-only
-				 * state request.
-				 */
-				resend_active = true;
-				break;
-			}
-		}
-	}
+    for (int i = 0; i < RPMH_REGULATOR_REG_MAX; i++) {
+        if (!(aggr_vreg->sent_mask & BIT(i)))
+            continue;
 
-	if (sleep_set_differs) {
-		/*
-		 * Generate an rpmh command consisting of only those registers
-		 * which have new values or which have never been touched before
-		 * (i.e. those that were previously not valid).
-		 */
-		sent_mask = 0;
-		for (i = 0, j = 0; i < max_reg_index; i++) {
-			if ((req_sleep.valid & BIT(i))
-			    && (!(aggr_vreg->aggr_req_sleep.valid & BIT(i))
-				|| aggr_vreg->aggr_req_sleep.reg[i]
-					!= req_sleep.reg[i])) {
-				cmd[j].addr = aggr_vreg->addr + i * 4;
-				cmd[j].data = req_sleep.reg[i];
-				cmd[j].wait = true;
-				j++;
-				sent_mask |= BIT(i);
-			}
-		}
+        if (i >= RPMH_REGULATOR_REG_MAX) {
+            pr_err("rpmh_regulator_send_aggregate_requests: Index %d out of range\n", i);
+            return -ERANGE;
+        }
 
-		/* Send the rpmh command if any register values differ. */
-		if (j > 0) {
-			rpmh_regulator_reorder_cmds(aggr_vreg, cmd, j);
+        pr_info("Writing to addr 0x%x, data 0x%x\n",
+                aggr_vreg->cmd[i].addr, aggr_vreg->cmd[i].data);
 
-			rc = rpmh_write_async(aggr_vreg->dev,
-					RPMH_SLEEP_STATE, cmd, j);
-			if (rc) {
-				aggr_vreg_err(aggr_vreg, "sleep state rpmh_write_async() failed, rc=%d\n",
-					rc);
-				return rc;
-			}
-			rpmh_regulator_req(vreg, &req_sleep,
-				&aggr_vreg->aggr_req_sleep,
-				sent_mask,
-				RPMH_SLEEP_STATE);
-			aggr_vreg->sleep_request_sent = true;
-			aggr_vreg->aggr_req_sleep = req_sleep;
-		}
-	}
-
-	/*
-	 * Generate an rpmh command consisting of only those registers
-	 * which have new values or which have never been touched before
-	 * (i.e. those that were previously not valid).
-	 */
-	sent_mask = 0;
-	for (i = 0, j = 0; i < max_reg_index; i++) {
-		if ((req_active.valid & BIT(i))
-		    && (!(aggr_vreg->aggr_req_active.valid & BIT(i))
-			|| aggr_vreg->aggr_req_active.reg[i]
-				!= req_active.reg[i] || resend_active)) {
-			cmd[j].addr = aggr_vreg->addr + i * 4;
-			cmd[j].data = req_active.reg[i];
-			cmd[j].wait = true;
-			j++;
-			sent_mask |= BIT(i);
-
-			/*
-			 * Must wait for ACK from RPMh if power state is
-			 * increasing
-			 */
-			if (req_active.reg[i]
-			    > aggr_vreg->aggr_req_active.reg[i])
-				wait_for_ack = true;
-		}
-	}
-
-	/* Send the rpmh command if any register values differ. */
-	if (j > 0) {
-		rpmh_regulator_reorder_cmds(aggr_vreg, cmd, j);
-
-		if (sleep_set_differs) {
-			state = RPMH_WAKE_ONLY_STATE;
-			rc = rpmh_write_async(aggr_vreg->dev, state, cmd, j);
-			if (rc) {
-				aggr_vreg_err(aggr_vreg, "%s state rpmh_write_async() failed, rc=%d\n",
-					rpmh_regulator_state_names[state], rc);
-				return rc;
-			}
-			rpmh_regulator_req(vreg, &req_active,
-				&aggr_vreg->aggr_req_active, sent_mask, state);
-		}
-
-		state = RPMH_ACTIVE_ONLY_STATE;
-		if (wait_for_ack)
-			rc = rpmh_write(aggr_vreg->dev, state, cmd, j);
-		else
-			rc = rpmh_write_async(aggr_vreg->dev, state,
-						cmd, j);
-		if (rc) {
-			aggr_vreg_err(aggr_vreg, "%s state rpmh_write() failed, rc=%d\n",
-				rpmh_regulator_state_names[state], rc);
-			return rc;
-		}
-		rpmh_regulator_req(vreg, &req_active,
-				&aggr_vreg->aggr_req_active, sent_mask, state);
-
-		aggr_vreg->aggr_req_active = req_active;
-		aggr_vreg->next_wait_for_ack = false;
-	}
-
-	return 0;
+        int ret = rpmh_write(vreg->dev, CMD_SET, aggr_vreg->cmd[i].addr,
+                             aggr_vreg->cmd[i].data);
+        if (ret)
+            return ret;
+    }
+    return 0;
 }
 
-static int rpmh_vreg_send_ds_requests(struct rpmh_aggr_vreg *aggr_vreg)
-{
-	int rc;
-
-	if (!aggr_vreg->enable_regulator_deepsleep) {
-		pr_debug("clients are handling regulator votes during deepsleep\n");
-		return 0;
-	}
 
 	mutex_lock(&aggr_vreg->lock);
 
@@ -1001,7 +885,7 @@ static u32 rpmh_regulator_set_reg(struct rpmh_vreg *vreg, int reg_index,
  *
  * Return: none
  */
-static void __maybe_unused rpmh_regulator_check_param_max(struct rpmh_aggr_vreg *aggr_vreg,
+static void rpmh_regulator_check_param_max(struct rpmh_aggr_vreg *aggr_vreg,
 					int index, u32 new_max)
 {
 	if ((aggr_vreg->aggr_req_active.valid & BIT(index))
@@ -1181,10 +1065,38 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
  *
  * Return: 0 on success, errno on failure
  */
-static int __maybe_unused rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
+static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 				int min_uv, int max_uv, unsigned int *selector)
 {
-	return 0;  // 🔹 電圧設定を無効化し、リブートを防ぐ
+	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
+	u32 prev_voltage;
+	int mv;
+	int rc = 0;
+
+	mv = DIV_ROUND_UP(min_uv, 1000);
+	if (mv * 1000 > max_uv) {
+		vreg_err(vreg, "no set points available in range %d-%d uV\n",
+			min_uv, max_uv);
+		return -EINVAL;
+	}
+
+	mutex_lock(&vreg->aggr_vreg->lock);
+
+	prev_voltage
+	     = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
+	rpmh_regulator_check_param_max(vreg->aggr_vreg,
+				RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
+
+	rc = rpmh_regulator_send_aggregate_requests(vreg);
+	if (rc) {
+		vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", mv, rc);
+		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
+					prev_voltage);
+	}
+
+	mutex_unlock(&vreg->aggr_vreg->lock);
+
+	return rc;
 }
 
 /**
