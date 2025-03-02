@@ -811,6 +811,8 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 	int i, j, max_reg_index, rc;
 	enum rpmh_state state;
 	u32 sent_mask;
+	
+	pr_info("rpmh_regulator_send_aggregate_requests: Function called for vreg=%p\n", vreg);
 
 	max_reg_index = rpmh_regulator_get_max_reg_index(aggr_vreg);
 
@@ -835,6 +837,9 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 			}
 		}
 	}
+	
+	pr_info("rpmh_regulator_send_aggregate_requests: sleep_set_differs = %d, resend_active = %d\n",
+        sleep_set_differs, resend_active);
 
 	if (sleep_set_differs) {
 		/*
@@ -851,6 +856,8 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 				cmd[j].addr = aggr_vreg->addr + i * 4;
 				cmd[j].data = req_sleep.reg[i];
 				cmd[j].wait = true;
+				pr_info("rpmh_regulator_send_aggregate_requests: Sleep cmd[%d] addr=0x%x, data=0x%x\n",
+                    j, cmd[j].addr, cmd[j].data);
 				j++;
 				sent_mask |= BIT(i);
 			}
@@ -858,11 +865,13 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 
 		/* Send the rpmh command if any register values differ. */
 		if (j > 0) {
+			pr_info("rpmh_regulator_send_aggregate_requests: Sending %d active state commands\n", j);			
 			rpmh_regulator_reorder_cmds(aggr_vreg, cmd, j);
 
 			rc = rpmh_write_async(aggr_vreg->dev,
 					RPMH_SLEEP_STATE, cmd, j);
 			if (rc) {
+				pr_err("rpmh_regulator_send_aggregate_requests: sleep state rpmh_write_async() failed, rc=%d\n", rc);
 				aggr_vreg_err(aggr_vreg, "sleep state rpmh_write_async() failed, rc=%d\n",
 					rc);
 				return rc;
@@ -889,7 +898,11 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 				!= req_active.reg[i] || resend_active)) {
 			cmd[j].addr = aggr_vreg->addr + i * 4;
 			cmd[j].data = req_active.reg[i];
-			cmd[j].wait = true;
+			cmd[j].wait = tr
+			pr_info("rpmh_regulator_send_aggregate_requests: Active cmd[%d] addr=0x%x, data=0x%x\n",
+        j, cmd[j].addr, cmd[j].data);
+);
+
 			j++;
 			sent_mask |= BIT(i);
 
@@ -904,13 +917,15 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 	}
 
 	/* Send the rpmh command if any register values differ. */
-	if (j > 0) {
+	if (j > 0
+		pr_info("rpmh_regulator_send_aggregate_requests: Sending %d active state commands\n", j);j);
 		rpmh_regulator_reorder_cmds(aggr_vreg, cmd, j);
 
 		if (sleep_set_differs) {
 			state = RPMH_WAKE_ONLY_STATE;
 			rc = rpmh_write_async(aggr_vreg->dev, state, cmd, j);
 			if (rc) {
+				pr_err("rpmh_regulator_send_aggregate_requests: sleep state rpmh_write_async() failed, rc=%d\n", rc);
 				aggr_vreg_err(aggr_vreg, "%s state rpmh_write_async() failed, rc=%d\n",
 					rpmh_regulator_state_names[state], rc);
 				return rc;
@@ -926,6 +941,7 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 			rc = rpmh_write_async(aggr_vreg->dev, state,
 						cmd, j);
 		if (rc) {
+			pr_err("rpmh_regulator_send_aggregate_requests: sleep state rpmh_write_async() failed, rc=%d\n", rc);
 			aggr_vreg_err(aggr_vreg, "%s state rpmh_write() failed, rc=%d\n",
 				rpmh_regulator_state_names[state], rc);
 			return rc;
