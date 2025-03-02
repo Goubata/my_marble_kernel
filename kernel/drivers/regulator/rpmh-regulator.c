@@ -939,6 +939,7 @@ rpmh_regulator_send_aggregate_requests(struct rpmh_vreg *vreg)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpmh_regulator_send_aggregate_requests);
 
 static int rpmh_vreg_send_ds_requests(struct rpmh_aggr_vreg *aggr_vreg)
 {
