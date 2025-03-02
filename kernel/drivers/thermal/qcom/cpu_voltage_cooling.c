@@ -42,28 +42,13 @@ static DEFINE_MUTEX(cc_list_lock);
 static LIST_HEAD(cc_cdev_list);
 
 static int cc_set_cur_state(struct thermal_cooling_device *cdev,
-				 unsigned long state)
+                            unsigned long state)
 {
-	struct cc_limits_data *cc_cdev = cdev->devdata;
-	int idx = 0, ret = 0;
-	if (state > cc_cdev->map_freq_ct)
-		return -EINVAL;
-
-	if (state == cc_cdev->thermal_state)
-		return 0;
-
-	cc_cdev->thermal_state = state;
-
-	for (idx = 0; (idx < CPU_MAP_CT) && (cc_cdev->cpu_map[idx] != -1) ; idx++) {
-		pr_debug("Mitigate CPU:%d to freq:%lu\n", cc_cdev->cpu_map[idx],
-				cc_cdev->map_freq[state].frequency[idx]);
-		ret = freq_qos_update_request(&cc_cdev->cc_qos_req[idx],
-				cc_cdev->map_freq[state].frequency[idx]);
-		if (ret < 0)
-			return ret;
-	}
-	return 0;
+    struct cc_limits_data *cc_cdev = cdev->devdata;
+    cc_cdev->thermal_state = state; // 🔹 状態だけ記録し、周波数制御を行わない
+    return 0;
 }
+
 
 static int cc_get_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long *state)
@@ -270,9 +255,9 @@ static int cc_init(struct device_node *np, int *cpus)
 			ret = -ENODEV;
 			goto cc_err_exit;
 		}
-		ret = freq_qos_add_request(&policy->constraints,
-				   &cc_cdev->cc_qos_req[idx], FREQ_QOS_MAX,
-				   cc_cdev->map_freq[0].frequency[idx]);
+		// ret = freq_qos_add_request(&policy->constraints,
+//             &cc_cdev->cc_qos_req[idx], FREQ_QOS_MAX,
+//             cc_cdev->map_freq[0].frequency[idx]);
 		cpufreq_cpu_put(policy);
 		if (ret < 0) {
 			pr_err("CPU%d Failed to add freq constraint (%d)\n",
@@ -371,63 +356,9 @@ cc_err_exit:;
 
 static int cc_cooling_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct device_node *np = dev->of_node;
-	struct device_node *dev_phandle, *subsys_np = NULL;
-	struct device *cpu_dev;
-	int ret = 0, idx = 0, count = 0, cpu;
-	int cpu_count = 0, first_cluster = 0;
-	int cpu_map[CPU_MAP_CT] = { -1, -1};
-
-	for_each_available_child_of_node(np, subsys_np) {
-		cpu_count = of_count_phandle_with_args(subsys_np, "qcom,cluster0",
-							NULL);
-		for (idx = 0; idx < cpu_count; idx++) {
-			dev_phandle = of_parse_phandle(subsys_np, "qcom,cluster0",
-							idx);
-			for_each_possible_cpu(cpu) {
-				cpu_dev = get_cpu_device(cpu);
-				if (cpu_dev && cpu_dev->of_node ==
-						dev_phandle) {
-					cpu_map[count] = cpu;
-					first_cluster = 1;
-					count++;
-					break;
-				}
-			}
-			if (first_cluster == 1)
-				break;
-		}
-
-		cpu_count = of_count_phandle_with_args(subsys_np, "qcom,cluster1",
-							NULL);
-		for (idx = 0; idx < cpu_count; idx++) {
-			dev_phandle = of_parse_phandle(subsys_np, "qcom,cluster1",
-							idx);
-			for_each_possible_cpu(cpu) {
-				cpu_dev = get_cpu_device(cpu);
-				if (cpu_dev && cpu_dev->of_node ==
-						dev_phandle) {
-					cpu_map[count] = cpu;
-					count++;
-					break;
-				}
-			}
-			if ((first_cluster && count == 2) ||
-				(!first_cluster && (count == 1)))
-				break;
-		}
-		if (count == 0) {
-			dev_err(dev, "No cluster avaliable\n");
-			return -EINVAL;
-		} else if (count == 2)
-			ret = cc_init(subsys_np, cpu_map);
-		else
-			ret = cc_init_single_cluster(subsys_np, cpu_map[0]);
-	}
-
-	return ret;
+    return 0;  // 🔹 クーリングデバイスの登録を無効化
 }
+
 
 static int cc_cooling_remove(struct platform_device *pdev)
 {
