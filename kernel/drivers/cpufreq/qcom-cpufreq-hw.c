@@ -34,8 +34,8 @@
 #include <trace/events/dcvsh.h>
 
 #define LUT_MAX_ENTRIES			40U
-#define MIN_VOLTAGE			400000
-#define MAX_VOLTAGE			1200000
+#define MIN_VOLTAGE			400
+#define MAX_VOLTAGE			1200
 #define LUT_SRC				GENMASK(31, 30)
 #define LUT_L_VAL			GENMASK(7, 0)
 #define LUT_CORE_COUNT			GENMASK(18, 16)
