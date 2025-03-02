@@ -284,159 +284,36 @@ static u32 get_target_freq(struct dcvs_path *path, u32 freq)
 }
 
 /* slow path update: does aggregation across multiple clients */
-static int qcom_dcvs_sp_update(const char *name, struct dcvs_freq *votes,
-						u32 update_mask)
+static int qcom_dcvs_sp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
-	int i, ret = 0;
-	bool found = false;
-	struct dcvs_voter *voter;
-	struct dcvs_path *path;
-	struct dcvs_freq new_freq;
-	enum dcvs_hw_type hw_type;
-
-	if (!name || !votes || !update_mask)
-		return -EINVAL;
-
-	for (i = 0; i < NUM_DCVS_HW_TYPES; i++) {
-		if (!(update_mask & BIT(i)))
-			continue;
-		hw_type = votes[i].hw_type;
-		path = get_dcvs_path(hw_type, DCVS_SLOW_PATH);
-		if (!path)
-			return -EINVAL;
-
-		mutex_lock(&path->voter_lock);
-		new_freq.ib = new_freq.ab = 0;
-		new_freq.hw_type = hw_type;
-		found = false;
-		list_for_each_entry(voter, &path->voter_list, node) {
-			if (!strcmp(voter->name, name)) {
-				found = true;
-				voter->freq.ib = votes[i].ib;
-				voter->freq.ab = votes[i].ab;
-			}
-			new_freq.ib = max(voter->freq.ib, new_freq.ib);
-			new_freq.ab += voter->freq.ab;
-		}
-		if (!found) {
-			mutex_unlock(&path->voter_lock);
-			return -EINVAL;
-		}
-		new_freq.ib = get_target_freq(path, new_freq.ib);
-		if (new_freq.ib != path->cur_freq.ib ||
-    new_freq.ab != path->cur_freq.ab) {
-    pr_info("commit_dcvs_freqs: Skipped frequency update (ib=%u, ab=%u)\n",
-            new_freq.ib, new_freq.ab);
-    // ret = path->commit_dcvs_freqs(path, &new_freq, 1);  // 🔹 無効化
+    return 0;  // 🔹 DCVS の影響を完全に排除
 }
-		mutex_unlock(&path->voter_lock);
-		if (ret < 0)
-			return ret;
-		trace_qcom_dcvs_update(name, hw_type, path->type, votes[i].ib,
-					new_freq.ib, votes[i].ab, new_freq.ab,
-					path->hw->boost_freq);
-	}
 
-	return ret;
-}
 
 /* fast path update: only single client allowed so lockless */
-static int qcom_dcvs_fp_update(const char *name, struct dcvs_freq *votes,
-						u32 update_mask)
+static int qcom_dcvs_fp_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
-	int i, ret = 0;
-	u32 commit_mask = 0;
-	struct dcvs_voter *voter;
-	struct dcvs_path *path;
-	struct dcvs_freq new_freqs[NUM_DCVS_HW_TYPES];
-	enum dcvs_hw_type hw_type;
-
-	if (!name || !votes || !update_mask)
-		return -EINVAL;
-
-	for (i = 0; i < NUM_DCVS_HW_TYPES; i++) {
-		if (!(update_mask & BIT(i)))
-			continue;
-		hw_type = votes[i].hw_type;
-		path = get_dcvs_path(hw_type, DCVS_FAST_PATH);
-		/* fast path requires votes be passed in correct order */
-		if (!path || i != hw_type)
-			return -EINVAL;
-
-		/* should match one and only voter in list */
-		voter = list_first_entry(&path->voter_list, struct dcvs_voter,
-									node);
-		if (!voter || strcmp(voter->name, name))
-			return -EINVAL;
-
-		/* no aggregation required since only single client allowed */
-		new_freqs[i].ib = get_target_freq(path, votes[i].ib);
-		if (new_freqs[i].ib != path->cur_freq.ib)
-			commit_mask |= BIT(i);
-		trace_qcom_dcvs_update(name, hw_type, path->type, votes[i].ib,
-					new_freqs[i].ib, 0, 0, 0);
-	}
-
-	if (commit_mask)
-		ret = path->commit_dcvs_freqs(path, new_freqs, commit_mask);
-
-	return ret;
+    return 0;
 }
+
 
 /*
  * percpu path update: only single client per cpu allowed so lockless.
  * Also note that client is responsible for disabling preemption
  */
-static int qcom_dcvs_percpu_update(const char *name, struct dcvs_freq *votes,
-						u32 update_mask)
+static int qcom_dcvs_percpu_update(const char *name, struct dcvs_freq *votes, u32 update_mask)
 {
-	int i, ret = 0;
-	u32 cpu = smp_processor_id();
-	struct dcvs_voter *voter;
-	struct dcvs_path *path;
-	struct dcvs_freq new_freq;
-	enum dcvs_hw_type hw_type;
-
-	if (!name || !votes || !update_mask)
-		return -EINVAL;
-
-	for (i = 0; i < NUM_DCVS_HW_TYPES; i++) {
-		if (!(update_mask & BIT(i)))
-			continue;
-		hw_type = votes[i].hw_type;
-		path = get_dcvs_path(hw_type, DCVS_PERCPU_PATH);
-		if (!path)
-			return -EINVAL;
-
-		/* should match one and only voter in list */
-		voter = list_first_entry(&path->voter_list, struct dcvs_voter,
-									node);
-		if (!voter || strcmp(voter->name, name))
-			return -EINVAL;
-
-		/* no aggregation required since only single client per cpu */
-		new_freq.ib = get_target_freq(path, votes[i].ib);
-		new_freq.hw_type = hw_type;
-		if (new_freq.ib != path->percpu_cur_freqs[cpu]) {
-			ret = path->commit_dcvs_freqs(path, &new_freq, 1);
-			if (ret < 0)
-				return ret;
-		}
-		trace_qcom_dcvs_update(name, hw_type, path->type, votes[i].ib,
-					new_freq.ib, 0, 0, 0);
-	}
-
-	return ret;
+    return 0;
 }
+
 
 int qcom_dcvs_update_votes(const char *name, struct dcvs_freq *votes,
-				u32 update_mask, enum dcvs_path_type path)
+                           u32 update_mask, enum dcvs_path_type path)
 {
-	pr_info("qcom_dcvs_update_votes: DCVS update blocked (name=%s, update_mask=0x%x)\n",
-			name, update_mask);
-	return 0;  // 🔹 DCVS の周波数変更をブロック
+    return 0;  // 🔹 DCVS の投票システムを完全に無効化
 }
 EXPORT_SYMBOL(qcom_dcvs_update_votes);
+
 
 
 int qcom_dcvs_register_voter(const char *name, enum dcvs_hw_type hw_type,
