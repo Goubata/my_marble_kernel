@@ -1001,7 +1001,7 @@ static u32 rpmh_regulator_set_reg(struct rpmh_vreg *vreg, int reg_index,
  *
  * Return: none
  */
-static void rpmh_regulator_check_param_max(struct rpmh_aggr_vreg *aggr_vreg,
+static void __maybe_unused rpmh_regulator_check_param_max(struct rpmh_aggr_vreg *aggr_vreg,
 					int index, u32 new_max)
 {
 	if ((aggr_vreg->aggr_req_active.valid & BIT(index))
