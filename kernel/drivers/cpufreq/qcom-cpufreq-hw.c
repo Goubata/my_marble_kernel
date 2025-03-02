@@ -7,6 +7,8 @@
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
 #include <linux/energy_model.h>
+#include <linux/delay.h>
+#include <linux/regulator/rpmh-regulator.h>
 #include <linux/init.h>
 #include <linux/device.h>   // デバイス関連の API (sysfs 含む)
 #include <linux/sysfs.h>    // sysfs 操作 (`device_create_file()` など)
@@ -78,6 +80,7 @@ struct cpufreq_qcom {
 	void __iomem *pdmem_base;
 	cpumask_t related_cpus;
 	unsigned long dcvsh_freq_limit;
+	struct rpmh_vreg *vreg;
 	struct delayed_work freq_poll_work;
 	struct mutex dcvsh_lock;
 	struct device_attribute freq_limit_attr;
