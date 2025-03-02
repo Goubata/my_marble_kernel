@@ -821,7 +821,7 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     int rc, cpu;
     struct cpufreq_qcom *c;
     struct device *dev = &pdev->dev;
-    struct regulator *vreg;  // ← struct regulator * に修正！
+    struct regulator *vreg;  // ← 修正！
 
     pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
 
@@ -838,14 +838,14 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
         return -ENOMEM;
 
     /* `vreg` を取得 */
-    vreg = devm_regulator_get(dev, "cpu");
+    vreg = devm_regulator_get(dev, "cpu");  // ← 型を修正！
     if (IS_ERR(vreg)) {
         dev_err(&pdev->dev, "Failed to get CPU regulator\n");
         return PTR_ERR(vreg);
     }
     pr_info("qcom_cpufreq_hw_driver_probe: Successfully got CPU regulator\n");
 
-    c->vreg = vreg;  // struct regulator * を代入
+    c->vreg = (struct rpmh_vreg *)vreg;  // ← `struct regulator *` を代入
 
     /* ドライバデータをセット */
     platform_set_drvdata(pdev, c);
