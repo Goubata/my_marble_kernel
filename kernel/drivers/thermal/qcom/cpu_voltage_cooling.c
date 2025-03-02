@@ -212,7 +212,7 @@ opp_err_exit:
 	return ERR_PTR(-EPROBE_DEFER);
 }
 
-static int cc_init(struct device_node *np, int *cpus)
+static int __maybe_unused cc_init(struct device_node *np, int *cpus)
 {
 	struct cc_limits_data *cc_cdev;
 	int idx = 0, ret = 0;
@@ -283,7 +283,7 @@ cc_err_exit:
 	return ret;
 }
 
-static int cc_init_single_cluster(struct device_node *np, int cpu)
+static int __maybe_unused cc_init_single_cluster(struct device_node *np, int cpu)
 {
 	struct cc_limits_data *cc_cdev;
 	int ret = 0;
