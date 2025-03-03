@@ -909,7 +909,9 @@ static struct platform_driver qcom_cpufreq_hw_driver = {
 
 static int __init qcom_cpufreq_hw_init(void)
 {
-	return platform_driver_register(&qcom_cpufreq_hw_driver);
+    pr_info("qcom_cpufreq_hw_init: Function called\n");
+
+    return platform_driver_register(&qcom_cpufreq_hw_driver);
 }
 subsys_initcall(qcom_cpufreq_hw_init);
 
