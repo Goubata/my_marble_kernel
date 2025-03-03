@@ -23,6 +23,10 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
+#include <linux/of.h>
+#include <linux/clk.h>
+#include <linux/err.h>
+#include <linux/io.h>
 #include <linux/pm_opp.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
