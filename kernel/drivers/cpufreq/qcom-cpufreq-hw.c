@@ -7,7 +7,6 @@
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
 #include <linux/platform_device.h>
-#include <linux/dev_printk.h>
 #include <linux/energy_model.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>  // ← 追加！
