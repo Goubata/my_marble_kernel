@@ -897,8 +897,7 @@ static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
 
 static const struct of_device_id qcom_cpufreq_hw_match[] = {
 	{ .compatible = "qcom,cpufreq-hw", .data = &cpufreq_qcom_std_offsets },
-	{ .compatible = "qcom,cpufreq-hw-epss",
-				   .data = &cpufreq_qcom_epss_std_offsets },
+	{ .compatible = "qcom,cpufreq-hw-epss", .data = &cpufreq_qcom_epss_std_offsets },
 	{}
 };
 
@@ -925,7 +924,7 @@ static int __init qcom_cpufreq_hw_init(void)
 
     return ret;
 }
-subsys_initcall(qcom_cpufreq_hw_init);
+core_initcall(qcom_cpufreq_hw_init);
 
 
 static void __exit qcom_cpufreq_hw_exit(void)
