@@ -6,6 +6,8 @@
 #include <linux/bitfield.h>
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
+#include <linux/platform_device.h>
+#include <linux/dev_printk.h>
 #include <linux/energy_model.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>  // ← 追加！
@@ -924,7 +926,7 @@ static int __init qcom_cpufreq_hw_init(void)
 
     return ret;
 }
-core_initcall(qcom_cpufreq_hw_init);
+subsys_initcall(qcom_cpufreq_hw_init);
 
 
 static void __exit qcom_cpufreq_hw_exit(void)
