@@ -825,8 +825,6 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 
     pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
 
-    MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
-
     /* CPUFreq のリソースを初期化 */
     rc = qcom_resources_init(pdev);
     if (rc) {
@@ -914,7 +912,9 @@ static int __init qcom_cpufreq_hw_init(void)
     int ret;
 
     printk(KERN_ALERT "qcom_cpufreq_hw_init: Function called\n");
-
+    
+    MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
+    
     ret = platform_driver_register(&qcom_cpufreq_hw_driver);
     if (ret)
         printk(KERN_ALERT "qcom_cpufreq_hw_init: platform_driver_register failed! ret=%d\n", ret);
