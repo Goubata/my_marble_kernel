@@ -117,6 +117,7 @@ static const u16 cpufreq_qcom_epss_std_offsets[REG_ARRAY_SIZE] = {
 	[REG_INTR_CLR]		= 0x308,
 	[REG_INTR_STATUS]	= 0x30C,
 };
+MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
 
 static struct cpufreq_qcom *qcom_freq_domain_map[NR_CPUS];
 static struct cpufreq_counter qcom_cpufreq_counter[NR_CPUS];
