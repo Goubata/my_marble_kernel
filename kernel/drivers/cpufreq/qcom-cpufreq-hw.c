@@ -118,6 +118,9 @@ static const u16 cpufreq_qcom_epss_std_offsets[REG_ARRAY_SIZE] = {
 	[REG_INTR_STATUS]	= 0x30C,
 };
 
+MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
+    
+
 static struct cpufreq_qcom *qcom_freq_domain_map[NR_CPUS];
 static struct cpufreq_counter qcom_cpufreq_counter[NR_CPUS];
 static struct thermal_cooling_device *cdev[NR_CPUS];
@@ -821,14 +824,14 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     int rc, cpu;
     struct cpufreq_qcom *c;
     struct device *dev = &pdev->dev;
-    struct regulator *vreg;  // ← 修正！
+    struct regulator *vreg;  // CPU の電圧レギュレータ
 
     pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
 
     /* CPUFreq のリソースを初期化 */
     rc = qcom_resources_init(pdev);
     if (rc) {
-        dev_err(&pdev->dev, "CPUFreq resource init failed\n");
+        dev_err(dev, "CPUFreq resource init failed\n");
         return rc;
     }
 
@@ -837,15 +840,16 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     if (!c)
         return -ENOMEM;
 
-    /* `vreg` を取得 */
-    vreg = devm_regulator_get(dev, "cpu");  // ← 型を修正！
+    /* CPU の電圧レギュレータを取得 */
+    vreg = devm_regulator_get(dev, "cpu");
     if (IS_ERR(vreg)) {
-        dev_err(&pdev->dev, "Failed to get CPU regulator\n");
+        dev_err(dev, "Failed to get CPU regulator\n");
         return PTR_ERR(vreg);
     }
     pr_info("qcom_cpufreq_hw_driver_probe: Successfully got CPU regulator\n");
 
-    c->vreg = (struct rpmh_vreg *)vreg;  // ← `struct regulator *` を代入
+    /* `struct rpmh_vreg *` にキャスト */
+    c->vreg = (struct rpmh_vreg *)vreg;
 
     /* ドライバデータをセット */
     platform_set_drvdata(pdev, c);
@@ -857,12 +861,12 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     /* CPUFreq ドライバを登録 */
     rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
     if (rc) {
-        dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
+        dev_err(dev, "CPUFreq HW driver failed to register\n");
         return rc;
     }
 
-    of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
-    dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
+    of_platform_populate(dev->of_node, NULL, NULL, dev);
+    dev_info(dev, "QCOM CPUFreq HW driver initialized successfully\n");
 
     return 0;
 }
@@ -912,8 +916,6 @@ static int __init qcom_cpufreq_hw_init(void)
     int ret;
 
     printk(KERN_ALERT "qcom_cpufreq_hw_init: Function called\n");
-    
-    MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
     
     ret = platform_driver_register(&qcom_cpufreq_hw_driver);
     if (ret)
