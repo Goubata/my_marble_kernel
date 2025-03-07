@@ -123,7 +123,9 @@ static const u16 cpufreq_qcom_epss_std_offsets[REG_ARRAY_SIZE] = {
 	[REG_INTR_STATUS]	= 0x30C,
 };
 
+MODULE_ALIAS("platform:qcom,cpufreq-hw");
 MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
+MODULE_ALIAS("platform:soc/qcom,cpufreq-hw"); // 追加
 
 static struct cpufreq_qcom *qcom_freq_domain_map[NR_CPUS];
 static struct cpufreq_counter qcom_cpufreq_counter[NR_CPUS];
@@ -900,10 +902,11 @@ static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
 
 static const struct of_device_id qcom_cpufreq_hw_match[] = {
 	{ .compatible = "qcom,cpufreq-hw", .data = &cpufreq_qcom_std_offsets },
-	{ .compatible = "qcom,cpufreq-hw-epss",
-				   .data = &cpufreq_qcom_epss_std_offsets },
+	{ .compatible = "qcom,cpufreq-hw-epss", .data = &cpufreq_qcom_epss_std_offsets },
+	{ .compatible = "soc/qcom,cpufreq-hw", .data = &cpufreq_qcom_std_offsets }, // 追加
 	{}
 };
+
 
 static struct platform_driver qcom_cpufreq_hw_driver = {
 	.probe = qcom_cpufreq_hw_driver_probe,
