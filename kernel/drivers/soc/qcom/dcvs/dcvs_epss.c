@@ -71,6 +71,7 @@ int populate_l3_table(struct device *dev, u32 **freq_table)
 	tmp_l3_table = kcalloc(MAX_L3_ENTRIES, sizeof(*tmp_l3_table), GFP_KERNEL);
 	if (!tmp_l3_table)
 		return -ENOMEM;
+
 	for (idx = 0; idx < MAX_L3_ENTRIES; idx++) {
 		data = readl_relaxed(ftbl_base + idx * ftbl_row_size);
 		src = ((data & SRC_MASK) >> SRC_SHIFT);
@@ -84,6 +85,14 @@ int populate_l3_table(struct device *dev, u32 **freq_table)
 		tmp_l3_table[idx] = freq / 1000UL;
 		prev_freq = freq;
 	}
+
+	// 最大値 +100MHz の OC 周波数を追加
+	if (idx < MAX_L3_ENTRIES) {
+		tmp_l3_table[idx] = prev_freq / 1000UL + 100000;
+		printk(KERN_INFO "L3 OC: Added OC Freq = %lu kHz at idx=%d\n", tmp_l3_table[idx], idx);
+		idx++;
+	}
+
 	len = idx;
 
 	*freq_table = devm_kzalloc(dev, len * sizeof(**freq_table), GFP_KERNEL);
@@ -107,9 +116,11 @@ static int commit_epss_l3(struct dcvs_path *path, struct dcvs_freq *freqs,
 	int cpu;
 	u32 idx, offset;
 
-	for (idx = 0; idx < hw->table_len; idx++)
-		if (freqs->ib <= hw->freq_table[idx])
-			break;
+	// OC のために最大周波数を選択
+	idx = hw->table_len - 1;
+
+	printk(KERN_INFO "L3 OC: Applying OC Freq = %u kHz (Index = %u)\n",
+			hw->freq_table[idx], idx);
 
 	if (hw->type == DCVS_L3) {
 		if (shared)
