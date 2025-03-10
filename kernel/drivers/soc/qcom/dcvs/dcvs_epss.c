@@ -86,9 +86,9 @@ int populate_l3_table(struct device *dev, u32 **freq_table)
 		prev_freq = freq;
 	}
 
-	// 最大値 +100MHz の OC 周波数を追加
+	// 最大値 +150MHz の OC 周波数を追加
 	if (idx < MAX_L3_ENTRIES) {
-		tmp_l3_table[idx] = prev_freq / 1000UL + 100000;
+		tmp_l3_table[idx] = prev_freq / 1000UL + 150000;
 		printk(KERN_INFO "L3 OC: Added OC Freq = %lu kHz at idx=%d\n", tmp_l3_table[idx], idx);
 		idx++;
 	}
