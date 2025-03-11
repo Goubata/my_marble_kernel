@@ -53,9 +53,9 @@ static struct pll_vco lucid_evo_vco[] = {
 };
 
 static struct alpha_pll_config gpu_cc_pll0_config = {
-	.l = 0x24,
+	.l = 0x22,  
 	.cal_l = 0x44,
-	.alpha = 0x7555,
+	.alpha = 0x7000,  
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -64,9 +64,9 @@ static struct alpha_pll_config gpu_cc_pll0_config = {
 };
 
 static struct alpha_pll_config gpu_cc_pll0_config_waipio_v2 = {
-	.l = 0x1D,
+	.l = 0x22,  
 	.cal_l = 0x44,
-	.alpha = 0xB000,
+	.alpha = 0x7000,  
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -113,9 +113,9 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 };
 
 static struct alpha_pll_config gpu_cc_pll1_config = {
-	.l = 0x34,
+	.l = 0x32,  
 	.cal_l = 0x44,
-	.alpha = 0x1555,
+	.alpha = 0x1400,  
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -241,8 +241,8 @@ static struct clk_rcg2 gpu_cc_ff_clk_src = {
 
 static const struct freq_tbl ftbl_gpu_cc_gmu_clk_src[] = {
 	F(19200000, P_BI_TCXO, 1, 0, 0),
-	F(200000000, P_GPLL0_OUT_MAIN_DIV, 1.5, 0, 0),
-	F(500000000, P_GPU_CC_PLL1_OUT_MAIN, 2, 0, 0),
+	F(150000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0), 
+	F(480000000, P_GPU_CC_PLL1_OUT_MAIN, 2, 0, 0), 
 	{ }
 };
 
@@ -272,7 +272,7 @@ static struct clk_rcg2 gpu_cc_gmu_clk_src = {
 };
 
 static const struct freq_tbl ftbl_gpu_cc_hub_clk_src[] = {
-	F(150000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0),
+	F(120000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0),
 	F(240000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0),
 	F(300000000, P_GPLL0_OUT_MAIN, 2, 0, 0),
 	{ }
