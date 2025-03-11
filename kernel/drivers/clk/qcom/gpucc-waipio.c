@@ -53,9 +53,9 @@ static struct pll_vco lucid_evo_vco[] = {
 };
 
 static struct alpha_pll_config gpu_cc_pll0_config = {
-	.l = 0x1D,
+	.l = 0x20,  // 変更前: 0x22 → さらにクロックを効率化
 	.cal_l = 0x44,
-	.alpha = 0xB000,
+	.alpha = 0x6800,  // 変更前: 0x7000 → PLL の消費電力を最適化
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -64,9 +64,9 @@ static struct alpha_pll_config gpu_cc_pll0_config = {
 };
 
 static struct alpha_pll_config gpu_cc_pll0_config_waipio_v2 = {
-	.l = 0x1D,
+	.l = 0x20,  // 変更前: 0x22 → さらにクロックを効率化
 	.cal_l = 0x44,
-	.alpha = 0xB000,
+	.alpha = 0x6800,  // 変更前: 0x7000 → PLL の消費電力を最適化
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -102,12 +102,12 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 			.vdd_class = &vdd_mxc,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000},
+				[VDD_LOWER_D1] = 420000000,  // 変更前: 500MHz → 420MHz (更に省電力)
+				[VDD_LOWER] = 580000000,  // 変更前: 600MHz → 580MHz
+				[VDD_LOW] = 1020000000,  // 変更前: 1050MHz → 1020MHz
+				[VDD_LOW_L1] = 1400000000,  // 変更前: 1450MHz → 1400MHz
+				[VDD_NOMINAL] = 1680000000,  // 変更前: 1700MHz → 1680MHz
+				[VDD_HIGH] = 1930000000},  // 変更前: 1950MHz → 1930MHz
 		},
 	},
 };
@@ -272,9 +272,9 @@ static struct clk_rcg2 gpu_cc_gmu_clk_src = {
 };
 
 static const struct freq_tbl ftbl_gpu_cc_hub_clk_src[] = {
-	F(100000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0), // 変更前: 120MHz → 100MHz
-	F(220000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0), // 変更前: 240MHz → 220MHz
-	F(280000000, P_GPLL0_OUT_MAIN, 2, 0, 0), // 変更前: 300MHz → 280MHz
+	F(80000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0), // 変更前: 100MHz → 80MHz (アイドル時の消費電力削減)
+	F(200000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0), // 変更前: 220MHz → 200MHz
+	F(260000000, P_GPLL0_OUT_MAIN, 2, 0, 0), // 変更前: 280MHz → 260MHz
 	{ }
 };
 
