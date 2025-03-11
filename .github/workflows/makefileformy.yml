@@ -253,7 +253,5 @@ jobs:
         with:
           name: kernel-build-Main
           path: |
-            kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
+            kernel/out/drivers/clk/qcom/gpucc-waipio.ko
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
-            kernel/out/drivers/thermal/qcom/cpu_voltage_cooling.ko
-            kernel/out/drivers/regulator/rpmh-regulator.ko
