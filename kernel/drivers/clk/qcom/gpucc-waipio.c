@@ -53,9 +53,9 @@ static struct pll_vco lucid_evo_vco[] = {
 };
 
 static struct alpha_pll_config gpu_cc_pll0_config = {
-	.l = 0x1D,
+	.l = 0x24,
 	.cal_l = 0x44,
-	.alpha = 0xB000,
+	.alpha = 0x7555,
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
