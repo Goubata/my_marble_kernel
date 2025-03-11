@@ -113,9 +113,9 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 };
 
 static struct alpha_pll_config gpu_cc_pll1_config = {
-	.l = 0x34,
+	.l = 0x30,  // 変更前: 0x32 → さらにクロックを効率化
 	.cal_l = 0x44,
-	.alpha = 0x1555,
+	.alpha = 0x1200,  // 変更前: 0x1400 → PLL の消費電力を最適化
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -241,8 +241,8 @@ static struct clk_rcg2 gpu_cc_ff_clk_src = {
 
 static const struct freq_tbl ftbl_gpu_cc_gmu_clk_src[] = {
 	F(19200000, P_BI_TCXO, 1, 0, 0),
-	F(200000000, P_GPLL0_OUT_MAIN_DIV, 1.5, 0, 0),
-	F(500000000, P_GPU_CC_PLL1_OUT_MAIN, 2, 0, 0),
+	F(120000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0), // 変更前: 150MHz → 120MHz
+	F(450000000, P_GPU_CC_PLL1_OUT_MAIN, 2, 0, 0), // 変更前: 480MHz → 450MHz
 	{ }
 };
 
@@ -272,9 +272,9 @@ static struct clk_rcg2 gpu_cc_gmu_clk_src = {
 };
 
 static const struct freq_tbl ftbl_gpu_cc_hub_clk_src[] = {
-	F(150000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0),
-	F(240000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0),
-	F(300000000, P_GPLL0_OUT_MAIN, 2, 0, 0),
+	F(100000000, P_GPLL0_OUT_MAIN_DIV, 2, 0, 0), // 変更前: 120MHz → 100MHz
+	F(220000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0), // 変更前: 240MHz → 220MHz
+	F(280000000, P_GPLL0_OUT_MAIN, 2, 0, 0), // 変更前: 300MHz → 280MHz
 	{ }
 };
 
@@ -470,7 +470,7 @@ static struct clk_branch gpu_cc_cx_gmu_clk = {
 				.hw = &gpu_cc_gmu_clk_src.clkr.hw,
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT | CLK_DONT_HOLD_STATE,
+			.flags = CLK_SET_RATE_PARENT | CLK_DONT_HOLD_STATE | CLK_IS_CRITICAL,
 			.ops = &clk_branch2_aon_ops,
 		},
 	},
