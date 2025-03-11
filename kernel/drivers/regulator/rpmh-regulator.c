@@ -1181,38 +1181,44 @@ static int rpmh_regulator_pbs_disable(struct regulator_dev *rdev)
  *
  * Return: 0 on success, errno on failure
  */
+ 
+ #define RPMH_VRM_MIN_MV 0      // 最小 0mV (変更なし)
+#define RPMH_VRM_MAX_MV 455
+
+
 static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
-				int min_uv, int max_uv, unsigned int *selector)
+                   int min_mv, int max_mv, unsigned int *selector)
 {
-	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
-	u32 prev_voltage;
-	int mv;
-	int rc = 0;
+    struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
+    u32 prev_voltage;
+    int rc = 0;
 
-	mv = DIV_ROUND_UP(min_uv, 1000);
-	if (mv * 1000 > max_uv) {
-		vreg_err(vreg, "no set points available in range %d-%d uV\n",
-			min_uv, max_uv);
-		return -EINVAL;
-	}
+    // 最小値は 0 のまま
+    if (max_mv > 455)
+        max_mv = 455;  // 最大電圧を 455mV に制限
 
-	mutex_lock(&vreg->aggr_vreg->lock);
+    if (min_mv > max_mv) {
+        vreg_err(vreg, "no set points available in range %d-%d mV\n",
+            min_mv, max_mv);
+        return -EINVAL;
+    }
 
-	prev_voltage
-	     = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
-	rpmh_regulator_check_param_max(vreg->aggr_vreg,
-				RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
+    mutex_lock(&vreg->aggr_vreg->lock);
 
-	rc = rpmh_regulator_send_aggregate_requests(vreg);
-	if (rc) {
-		vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", mv, rc);
-		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
-					prev_voltage);
-	}
+    prev_voltage = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, min_mv);
+    rpmh_regulator_check_param_max(vreg->aggr_vreg,
+                RPMH_REGULATOR_REG_VRM_VOLTAGE, max_mv);
 
-	mutex_unlock(&vreg->aggr_vreg->lock);
+    rc = rpmh_regulator_send_aggregate_requests(vreg);
+    if (rc) {
+        vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", min_mv, rc);
+        rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
+                    prev_voltage);
+    }
 
-	return rc;
+    mutex_unlock(&vreg->aggr_vreg->lock);
+
+    return rc;
 }
 
 /**
