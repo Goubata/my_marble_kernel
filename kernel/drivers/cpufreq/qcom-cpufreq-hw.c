@@ -477,7 +477,14 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 
 		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] +
 				      i * lut_row_size);
-		volt = FIELD_GET(LUT_VOLT, data) * 1000;
+		// volt = FIELD_GET(LUT_VOLT, data) * 1000;
+		data = 0; // 初期化
+		volt = 0; // 初期化
+		unsigned int LUT_VOLT = 0x7FF; // 例としての初期値、実際の定義に合わせてください
+		volt = (data & LUT_VOLT) * 1000; // FIELD_GETの代わりにビット演算を使用
+		volt = modify_voltage(volt);  // 電圧値を変更する
+		data = (data & ~LUT_VOLT) | ((int(volt / 1000)) & LUT_VOLT);  // FIELD_PREPの代わりにビット演算を使用
+		// data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, volt / 1000);  // 変更された電圧値を書き戻す
 
 		if (src)
 			freq = xo_rate * lval / 1000;
@@ -532,6 +539,31 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 
 	return 0;
 }
+
+static int modify_voltage(int volt)
+{
+    """
+    電圧値を変更してアンダーボルトを実装する関数
+
+    Args:
+        volt (int): 元の電圧値 (mV)
+
+    Returns:
+        int: 変更された電圧値 (mV)
+    """
+    int undervolt_mv = 25;  // アンダーボルトする電圧値 (mV)
+    int new_volt = volt - undervolt_mv;
+    // 安全な範囲内に電圧値があることを確認する
+    if (new_volt < 0) {
+        new_volt = 0;  // 電圧が負にならないようにする
+    }
+    return new_volt;
+}
+
+// 注意:
+// * FIELD_GET, LUT_VOLT, data は実際のコード内の定義に合わせてください。
+// * 例として、qcom-cpufreq-hw.txtファイルから抜粋した定義をコメントに記載しています。
+// * FIELD_PREPについても、実際のコード内の定義に合わせて修正する必要があります。
 
 static void qcom_get_related_cpus(int index, struct cpumask *m)
 {
