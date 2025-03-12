@@ -480,7 +480,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
 
 		// ここでアンダーボルテージ適用
-		volt -= 25000 * 1000;
+		volt -= 50000 * 1000;
 
 		if (src)
 			freq = xo_rate * lval / 1000;
