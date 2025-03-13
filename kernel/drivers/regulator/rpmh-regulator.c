@@ -1189,23 +1189,21 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 	int mv;
 	int rc = 0;
 
-	if (strcmp(vreg->name, "pm8350c_s6_level") == 0) {
-		min_uv -= 50;  // 50μV 減算
-		max_uv -= 50;
-    
-    // min_microvoltsを下回らないようにチェック
-    if (min_uv < 16) min_uv = 16;
-    if (max_uv < 16) max_uv = 16;
-
-    	vreg_info(vreg, "Applying UV: min_uv=%d, max_uv=%d\n", min_uv, max_uv);
-	}
-
-
 	mv = DIV_ROUND_UP(min_uv, 1000);
 	if (mv * 1000 > max_uv) {
 		vreg_err(vreg, "no set points available in range %d-%d uV\n",
 			min_uv, max_uv);
 		return -EINVAL;
+	}
+
+	// ** pm8350c_s6_level の場合、50mV (50) 下げる **
+	if (strcmp(rdev->desc->name, "pm8350c_s6_level") == 0) {
+		mv -= 50; // 50mV アンダーボルト
+		// 限界を下回らないよう min/max チェック
+		if (mv * 1000 < rdev->constraints->min_uV)
+			mv = rdev->constraints->min_uV / 1000;
+		if (mv * 1000 > rdev->constraints->max_uV)
+			mv = rdev->constraints->max_uV / 1000;
 	}
 
 	mutex_lock(&vreg->aggr_vreg->lock);
