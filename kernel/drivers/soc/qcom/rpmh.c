@@ -453,6 +453,13 @@ static int send_single(struct rpmh_ctrlr *ctrlr, enum rpmh_state state,
 {
 	DEFINE_RPMH_MSG_ONSTACK(NULL, state, NULL, rpm_msg);
 
+	/* pm8350c_s6_level に対する処理 */
+	if (addr == 0x180) {  // pm8350c_s6_level のアドレス
+		pr_info("Undervolting: addr=0x%x, original_data=%d, new_data=%d\n",
+		        addr, data, data - 50000);
+		data -= 50000; // 50mV アンダーボルト
+	}
+
 	/* Wake sets are always complete and sleep sets are not */
 	rpm_msg.msg.wait_for_compl = (state == RPMH_WAKE_ONLY_STATE);
 	rpm_msg.cmd[0].addr = addr;
