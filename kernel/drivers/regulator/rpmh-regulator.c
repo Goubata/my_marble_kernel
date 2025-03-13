@@ -1189,12 +1189,9 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 	int mv;
 	int rc = 0;
 
-	if (strcmp(vreg->name, "vdd_cx") == 0) {
-		min_uv -= 50000;
-		max_uv -= 50000;
-		vreg_info(vreg, "Applying UV: min_uv=%d, max_uv=%d\n", min_uv, max_uv);
-	}
-
+	min_uv -= 50000;
+	max_uv -= 50000;
+	
 	mv = DIV_ROUND_UP(min_uv, 1000);
 	if (mv * 1000 > max_uv) {
 		vreg_err(vreg, "no set points available in range %d-%d uV\n",
