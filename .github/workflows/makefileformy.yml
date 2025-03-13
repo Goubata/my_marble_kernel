@@ -254,3 +254,4 @@ jobs:
           name: kernel-build-Main
           path: |
             kernel/out/drivers/cpufreq/qcom-cpufreq-hw.ko
+            kernel/out/drivers/regulator/rpmh-regulator.ko
