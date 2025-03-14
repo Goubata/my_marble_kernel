@@ -52,7 +52,7 @@ static struct pll_vco lucid_evo_vco[] = {
 	{ 249600000, 2000000000, 0 },
 };
 
-static const struct alpha_pll_config gpu_cc_pll0_config = {
+static struct alpha_pll_config gpu_cc_pll0_config = {
 	.l = 0x1D,
 	.cal_l = 0x44,
 	.alpha = 0xB000,
@@ -63,7 +63,7 @@ static const struct alpha_pll_config gpu_cc_pll0_config = {
 	.user_ctl_hi_val = 0x00000805,
 };
 
-static const struct alpha_pll_config gpu_cc_pll0_config_waipio_v2 = {
+static struct alpha_pll_config gpu_cc_pll0_config_waipio_v2 = {
 	.l = 0x1D,
 	.cal_l = 0x44,
 	.alpha = 0xB000,
@@ -72,6 +72,15 @@ static const struct alpha_pll_config gpu_cc_pll0_config_waipio_v2 = {
 	.config_ctl_hi1_val = 0x32AA299C,
 	.user_ctl_val = 0x00000000,
 	.user_ctl_hi_val = 0x00000805,
+};
+
+static struct clk_init_data gpu_cc_pll0_cape_init = {
+	.name = "gpu_cc_pll0",
+	.parent_data = &(const struct clk_parent_data){
+		.fw_name = "bi_tcxo",
+	},
+	.num_parents = 1,
+	.ops = &clk_alpha_pll_lucid_ole_ops,
 };
 
 static struct clk_alpha_pll gpu_cc_pll0 = {
@@ -79,6 +88,7 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 	.vco_table = lucid_evo_vco,
 	.num_vco = ARRAY_SIZE(lucid_evo_vco),
 	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_EVO],
+	.config = &gpu_cc_pll0_config,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gpu_cc_pll0",
@@ -96,14 +106,12 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 				[VDD_LOWER] = 615000000,
 				[VDD_LOW] = 1066000000,
 				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000,
-			},  // Add this closing brace
+				[VDD_NOMINAL] = 1750000000},
 		},
 	},
 };
 
-static const struct alpha_pll_config gpu_cc_pll1_config = {
+static struct alpha_pll_config gpu_cc_pll1_config = {
 	.l = 0x34,
 	.cal_l = 0x44,
 	.alpha = 0x1555,
@@ -114,11 +122,21 @@ static const struct alpha_pll_config gpu_cc_pll1_config = {
 	.user_ctl_hi_val = 0x00000805,
 };
 
+static struct clk_init_data gpu_cc_pll1_cape_init = {
+	.name = "gpu_cc_pll1",
+	.parent_data = &(const struct clk_parent_data){
+		.fw_name = "bi_tcxo",
+	},
+	.num_parents = 1,
+	.ops = &clk_alpha_pll_lucid_ole_ops,
+};
+
 static struct clk_alpha_pll gpu_cc_pll1 = {
 	.offset = 0x1000,
 	.vco_table = lucid_evo_vco,
 	.num_vco = ARRAY_SIZE(lucid_evo_vco),
 	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_EVO],
+	.config = &gpu_cc_pll1_config,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gpu_cc_pll1",
@@ -137,8 +155,7 @@ static struct clk_alpha_pll gpu_cc_pll1 = {
 				[VDD_LOW] = 1066000000,
 				[VDD_LOW_L1] = 1500000000,
 				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000,
-			},  // Add this closing brace
+				[VDD_HIGH] = 2000000000},
 		},
 	},
 };
@@ -224,7 +241,7 @@ static struct clk_rcg2 gpu_cc_ff_clk_src = {
 static const struct freq_tbl ftbl_gpu_cc_gmu_clk_src[] = {
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(200000000, P_GPLL0_OUT_MAIN_DIV, 1.5, 0, 0),
-	F(500000000, P_GPU_CC_PLL1_OUT_MAIN, 1, 0, 0), // 1倍に修正
+	F(500000000, P_GPU_CC_PLL1_OUT_MAIN, 1, 0, 0), // ここを 1.5 から 1 に修正して無駄なクロックを削減
 	{ }
 };
 
@@ -484,7 +501,7 @@ static struct clk_branch gpu_cc_cxo_aon_clk = {
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
-			// .ops = &clk_branch2_ops,  ← これをコメントアウトしてクロックを無効化
+			.ops = &clk_branch2_ops,
 		},
 	},
 };
@@ -520,7 +537,7 @@ static struct clk_branch gpu_cc_demet_clk = {
 			},
 			.num_parents = 1,
 			.flags = CLK_SET_RATE_PARENT,
-			.ops = &clk_branch2_ops,
+			.ops = &clk_branch2_aon_ops,
 		},
 	},
 };
@@ -763,6 +780,7 @@ static const struct qcom_reset_map gpu_cc_waipio_resets[] = {
 	[GPUCC_GPU_CC_GMU_BCR] = { 0x9314 },
 	[GPUCC_GPU_CC_GX_BCR] = { 0x9058 },
 	[GPUCC_GPU_CC_XO_BCR] = { 0x9000 },
+	[GPUCC_GPU_CC_FREQUENCY_LIMITER_IRQ_CLEAR] = { 0x9538, 0 },
 };
 
 static const struct regmap_config gpu_cc_waipio_regmap_config = {
@@ -786,13 +804,73 @@ static const struct qcom_cc_desc gpu_cc_waipio_desc = {
 static const struct of_device_id gpu_cc_waipio_match_table[] = {
 	{ .compatible = "qcom,waipio-gpucc" },
 	{ .compatible = "qcom,waipio-gpucc-v2" },
+	{ .compatible = "qcom,cape-gpucc" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, gpu_cc_waipio_match_table);
 
+static void gpu_cc_cape_fixup(struct regmap *regmap)
+{
+	/* Update GPUCC PLL0 Config */
+	gpu_cc_pll0_config.l = 0x1D;
+	gpu_cc_pll0_config.cal_l = 0x44;
+	gpu_cc_pll0_config.cal_l_ringosc = 0x44;
+	gpu_cc_pll0_config.alpha = 0xB000;
+	gpu_cc_pll0_config.config_ctl_val = 0x20485699;
+	gpu_cc_pll0_config.config_ctl_hi_val = 0x00182261;
+	gpu_cc_pll0_config.config_ctl_hi1_val = 0x82AA299C;
+	gpu_cc_pll0_config.test_ctl_val = 0x00000000;
+	gpu_cc_pll0_config.test_ctl_hi_val = 0x00000003;
+	gpu_cc_pll0_config.test_ctl_hi1_val = 0x00009000;
+	gpu_cc_pll0_config.test_ctl_hi2_val = 0x00000034;
+	gpu_cc_pll0_config.user_ctl_val = 0x00000000;
+	gpu_cc_pll0_config.user_ctl_hi_val = 0x00000005;
+
+	gpu_cc_pll0.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE];
+	gpu_cc_pll0.clkr.hw.init = &gpu_cc_pll0_cape_init;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 615000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER] = 0;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW] = 1100000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1600000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_NOMINAL] = 2000000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_HIGH] = 0;
+
+	/* Update GPUCC PLL1 Config */
+	gpu_cc_pll1_config.l = 0x34;
+	gpu_cc_pll1_config.cal_l = 0x44;
+	gpu_cc_pll1_config.cal_l_ringosc = 0x44;
+	gpu_cc_pll1_config.alpha = 0x1555;
+	gpu_cc_pll1_config.config_ctl_val = 0x20485699;
+	gpu_cc_pll1_config.config_ctl_hi_val = 0x00182261;
+	gpu_cc_pll1_config.config_ctl_hi1_val = 0x82AA299C;
+	gpu_cc_pll1_config.test_ctl_val = 0x00000000;
+	gpu_cc_pll1_config.test_ctl_hi_val = 0x00000003;
+	gpu_cc_pll1_config.test_ctl_hi1_val = 0x00009000;
+	gpu_cc_pll1_config.test_ctl_hi2_val = 0x00000034;
+	gpu_cc_pll1_config.user_ctl_val = 0x00000000;
+	gpu_cc_pll1_config.user_ctl_hi_val = 0x00000005;
+
+	gpu_cc_pll1.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE];
+	gpu_cc_pll1.clkr.hw.init = &gpu_cc_pll1_cape_init;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 615000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER] = 0;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW] = 1100000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1600000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_NOMINAL] = 2000000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_HIGH] = 0;
+
+	gpu_cc_ff_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
+	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 150000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOW] = 300000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_NOMINAL] = 0;
+	gpu_cc_xo_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 19200000;
+}
+
 static void gpu_cc_waipio_fixup_waipiov2(struct regmap *regmap)
 {
-	clk_lucid_evo_pll_configure(&gpu_cc_pll0, regmap, &gpu_cc_pll0_config_waipio_v2);
+	gpu_cc_pll0.config = &gpu_cc_pll0_config_waipio_v2;
+
 	gpu_cc_ff_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 150000000;
@@ -814,6 +892,7 @@ static int gpu_cc_waipio_fixup(struct platform_device *pdev, struct regmap *regm
 	return 0;
 }
 
+
 static int gpu_cc_waipio_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
@@ -823,12 +902,14 @@ static int gpu_cc_waipio_probe(struct platform_device *pdev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
-	clk_lucid_evo_pll_configure(&gpu_cc_pll0, regmap, &gpu_cc_pll0_config);
-	clk_lucid_evo_pll_configure(&gpu_cc_pll1, regmap, &gpu_cc_pll1_config);
-
 	ret = gpu_cc_waipio_fixup(pdev, regmap);
 	if (ret)
 		return ret;
+
+	clk_lucid_evo_pll_configure(&gpu_cc_pll0, regmap, gpu_cc_pll0.config);
+	clk_lucid_evo_pll_configure(&gpu_cc_pll1, regmap, gpu_cc_pll1.config);
+
+	regmap_write(regmap, 0x9534, 0x0);
 
 	ret = qcom_cc_really_probe(pdev, &gpu_cc_waipio_desc, regmap);
 	if (ret) {
