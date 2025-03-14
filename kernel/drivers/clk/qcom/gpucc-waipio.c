@@ -809,7 +809,7 @@ static const struct of_device_id gpu_cc_waipio_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, gpu_cc_waipio_match_table);
 
-static void gpu_cc_cape_fixup(struct regmap *regmap)
+static void __maybe_unused gpu_cc_cape_fixup(struct regmap *regmap)
 {
 	/* Update GPUCC PLL0 Config */
 	gpu_cc_pll0_config.l = 0x1D;
@@ -867,7 +867,7 @@ static void gpu_cc_cape_fixup(struct regmap *regmap)
 	gpu_cc_xo_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 19200000;
 }
 
-static void gpu_cc_waipio_fixup_waipiov2(struct regmap *regmap)
+static void __maybe_unused gpu_cc_waipio_fixup_waipiov2(struct regmap *regmap)
 {
 	gpu_cc_pll0.config = &gpu_cc_pll0_config_waipio_v2;
 
