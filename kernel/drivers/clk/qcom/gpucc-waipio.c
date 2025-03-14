@@ -53,9 +53,9 @@ static struct pll_vco lucid_evo_vco[] = {
 };
 
 static const struct alpha_pll_config gpu_cc_pll0_config = {
-	.l = 0x24,
+	.l = 0x1D,
 	.cal_l = 0x44,
-	.alpha = 0x7555,
+	.alpha = 0xB000,
 	.config_ctl_val = 0x20485699,
 	.config_ctl_hi_val = 0x00182261,
 	.config_ctl_hi1_val = 0x32AA299C,
@@ -799,15 +799,14 @@ static void gpu_cc_waipio_fixup_waipiov2(struct regmap *regmap)
 
 static int gpu_cc_waipio_fixup(struct platform_device *pdev, struct regmap *regmap)
 {
-	const char *compat = NULL;
-	int compatlen = 0;
+	clk_lucid_evo_pll_configure(&gpu_cc_pll0, regmap, &gpu_cc_pll0_config);
 
-	compat = of_get_property(pdev->dev.of_node, "compatible", &compatlen);
-	if (!compat || compatlen <= 0)
-		return -EINVAL;
-
-	if (!strcmp(compat, "qcom,waipio-gpucc-v2"))
-		gpu_cc_waipio_fixup_waipiov2(regmap);
+	// v2 のクロック制限を無印にも適用
+	gpu_cc_ff_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
+	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 150000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOW_L0] = 300000000;
+	gpu_cc_xo_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 19200000;
 
 	return 0;
 }
