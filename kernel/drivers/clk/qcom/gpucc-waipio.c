@@ -828,12 +828,13 @@ static void __maybe_unused gpu_cc_cape_fixup(struct regmap *regmap)
 
 	gpu_cc_pll0.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE];
 	gpu_cc_pll0.clkr.hw.init = &gpu_cc_pll0_cape_init;
-	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 615000000;
-	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER] = 0;
-	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW] = 1100000000;
-	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1600000000;
-	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_NOMINAL] = 2000000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 500000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOWER] = 800000000;
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW] = 1000000000;  // ここを少し下げる
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1400000000;  // ここも下げる
+	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_NOMINAL] = 1800000000;  // ここも下げる
 	gpu_cc_pll0.clkr.vdd_data.rate_max[VDD_HIGH] = 0;
+
 
 	/* Update GPUCC PLL1 Config */
 	gpu_cc_pll1_config.l = 0x34;
@@ -852,12 +853,13 @@ static void __maybe_unused gpu_cc_cape_fixup(struct regmap *regmap)
 
 	gpu_cc_pll1.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_LUCID_OLE];
 	gpu_cc_pll1.clkr.hw.init = &gpu_cc_pll1_cape_init;
-	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 615000000;
-	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER] = 0;
-	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW] = 1100000000;
-	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1600000000;
-	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_NOMINAL] = 2000000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 500000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOWER] = 800000000;
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW] = 1000000000;  // ここを少し下げる
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_LOW_L1] = 1400000000;  // ここも下げる
+	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_NOMINAL] = 1800000000;  // ここも下げる
 	gpu_cc_pll1.clkr.vdd_data.rate_max[VDD_HIGH] = 0;
+
 
 	gpu_cc_ff_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
@@ -886,7 +888,8 @@ static int gpu_cc_waipio_fixup(struct platform_device *pdev, struct regmap *regm
 	gpu_cc_ff_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 150000000;
-	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOW_L0] = 300000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOW_L0] = 400000000;
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_NOMINAL] = 500000000
 	gpu_cc_xo_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 19200000;
 
 	return 0;
