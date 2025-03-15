@@ -1189,25 +1189,35 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 	int mv;
 	int rc = 0;
 
-	mv = DIV_ROUND_UP(min_uv, 1000);
-	if (mv * 1000 > max_uv) {
-		vreg_err(vreg, "no set points available in range %d-%d uV\n",
+	// **pm8350c_s6_level の場合、電圧を 225mV に固定**
+	if (strcmp(rdev->desc->name, "pm8350c_s6_level") == 0) {
+		pr_info("Undervolting pm8350c_s6_level: min_uv=%d -> 225, max_uv=%d\n", min_uv, max_uv);
+		min_uv = 225;
+		max_uv = (max_uv < 225) ? 225 : max_uv;
+	}
+
+	mv = DIV_ROUND_UP(min_uv, 1);  // **mV 単位で処理**
+	if (mv > max_uv) {
+		vreg_err(vreg, "no set points available in range %d-%d mV\n",
 			min_uv, max_uv);
 		return -EINVAL;
 	}
 
 	mutex_lock(&vreg->aggr_vreg->lock);
 
-	prev_voltage
-	     = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
-	rpmh_regulator_check_param_max(vreg->aggr_vreg,
-				RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
+	// **アクティブ電圧設定**
+	prev_voltage = rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, mv);
+	rpmh_regulator_check_param_max(vreg->aggr_vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, max_uv);
 
+	// **スリープ時の電圧も 225mV に固定**
+	vreg->aggr_vreg->aggr_req_sleep.reg[RPMH_REGULATOR_REG_VRM_VOLTAGE] = mv;
+	vreg->aggr_vreg->aggr_req_sleep.valid |= BIT(RPMH_REGULATOR_REG_VRM_VOLTAGE);
+
+	// **電圧リクエストを送信**
 	rc = rpmh_regulator_send_aggregate_requests(vreg);
 	if (rc) {
 		vreg_err(vreg, "set voltage=%d mV failed, rc=%d\n", mv, rc);
-		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE,
-					prev_voltage);
+		rpmh_regulator_set_reg(vreg, RPMH_REGULATOR_REG_VRM_VOLTAGE, prev_voltage);
 	}
 
 	mutex_unlock(&vreg->aggr_vreg->lock);
