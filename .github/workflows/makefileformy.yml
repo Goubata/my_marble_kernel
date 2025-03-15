@@ -255,3 +255,4 @@ jobs:
           path: |
             kernel/out/drivers/clk/qcom/gpucc-waipio.ko
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
+            kernel/out/drivers/regulator/rpmh-regulator.ko
