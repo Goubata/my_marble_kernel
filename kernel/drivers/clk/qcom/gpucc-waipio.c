@@ -889,7 +889,7 @@ static int gpu_cc_waipio_fixup(struct platform_device *pdev, struct regmap *regm
 	gpu_cc_gmu_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 200000000;
 	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 150000000;
 	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_LOW_L0] = 400000000;
-	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_NOMINAL] = 500000000
+	gpu_cc_hub_clk_src.clkr.vdd_data.rate_max[VDD_NOMINAL] = 500000000;
 	gpu_cc_xo_clk_src.clkr.vdd_data.rate_max[VDD_LOWER_D1] = 19200000;
 
 	return 0;
