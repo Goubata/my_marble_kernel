@@ -456,6 +456,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 	struct device *dev = &pdev->dev, *cpu_dev;
 	u32 data, src, lval, i, core_count, prev_cc, prev_freq, freq, volt;
 	unsigned long cpu;
+	uint32_t new_volt;  
 
 	c->table = devm_kcalloc(dev, lut_max_entries + 1,
 				sizeof(*c->table), GFP_KERNEL);
@@ -477,8 +478,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		if (of_device_is_compatible(dev->of_node, "qcom,cpufreq-hw-epss"))
 			core_count = FIELD_GET(GENMASK(19, 16), data);
 			
-		uint32_t new_volt;
-		
 		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
 
