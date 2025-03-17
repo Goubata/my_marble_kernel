@@ -695,8 +695,10 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 {
     int rc, cpu;
     struct cpufreq_qcom *c;
+    u32 orig_v0, orig_v1, orig_v2;
+    u32 new_v0, new_v1, new_v2;
 
-    
+    /* CPUFreq のリソースを初期化 */
     rc = qcom_resources_init(pdev);
     if (rc) {
         dev_err(&pdev->dev, "CPUFreq resource init failed\n");
@@ -706,7 +708,7 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
     for_each_possible_cpu(cpu)
         spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
 
-  
+    /* PDMEM のアドレスを取得 */
     c = qcom_freq_domain_map[0]; 
     if (!c || !c->pdmem_base) {
         dev_err(&pdev->dev, "Failed to get pdmem_base\n");
@@ -715,26 +717,26 @@ static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 
     pr_info("PDMEM base address: %p\n", c->pdmem_base);
 
- 
-    u32 orig_v0 = readl_relaxed(c->pdmem_base + 0x04);
-    u32 orig_v1 = readl_relaxed(c->pdmem_base + 0x08);
-    u32 orig_v2 = readl_relaxed(c->pdmem_base + 0x0C);
+    /* PDMEM のレジスタを読み取る */
+    orig_v0 = readl_relaxed(c->pdmem_base + 0x04);
+    orig_v1 = readl_relaxed(c->pdmem_base + 0x08);
+    orig_v2 = readl_relaxed(c->pdmem_base + 0x0C);
 
-   
-    u32 new_v0 = (orig_v0 * 95) / 100;
-    u32 new_v1 = (orig_v1 * 95) / 100;
-    u32 new_v2 = (orig_v2 * 95) / 100;
+    /* 95% にスケールダウン */
+    new_v0 = (orig_v0 * 95) / 100;
+    new_v1 = (orig_v1 * 95) / 100;
+    new_v2 = (orig_v2 * 95) / 100;
 
-  
+    /* 書き込み */
     writel_relaxed(new_v0, c->pdmem_base + 0x04);
     writel_relaxed(new_v1, c->pdmem_base + 0x08);
     writel_relaxed(new_v2, c->pdmem_base + 0x0C);
-    mb();  
+    mb();  // メモリバリア
 
     pr_info("PDMEM Voltage Updated: V0 = %u -> %u, V1 = %u -> %u, V2 = %u -> %u\n",
             orig_v0, new_v0, orig_v1, new_v1, orig_v2, new_v2);
 
-    
+    /* CPUFreq ドライバを登録 */
     rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
     if (rc) {
         dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
