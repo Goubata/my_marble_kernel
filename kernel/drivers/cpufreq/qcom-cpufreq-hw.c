@@ -41,7 +41,7 @@
 #define CYCLE_CNTR_OFFSET(core_id, m, acc_count)		\
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
-#define VOLTAGE_SCALE_FACTOR 92  // 92% に固定
+#define VOLTAGE_SCALE_FACTOR 95  // 95% に固定
 
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 static bool ukee_overclock = true;
