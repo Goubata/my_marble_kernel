@@ -41,7 +41,7 @@
 #define CYCLE_CNTR_OFFSET(core_id, m, acc_count)		\
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
-#define VOLTAGE_SCALE_FACTOR 95  // 92% に固定
+#define VOLTAGE_SCALE_FACTOR 95  // 95% に固定
 
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 static bool ukee_overclock = true;
@@ -481,21 +481,12 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
 
-// 92% にスケールダウン (ただし範囲チェックを追加)
+// 92% にスケールダウン
 		new_volt = (volt * VOLTAGE_SCALE_FACTOR) / 100;
-		if (new_volt < 500000 || new_volt > 1200000) {  // 500mV～1.2V の範囲外なら変更しない
-  		  printk(KERN_ERR "CPUFreq: Skipping invalid voltage %u\n", new_volt);
-		} else {
-	   data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, new_volt / 1000);
- 	  writel_relaxed(data, c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
-  	 printk(KERN_INFO "CPUFreq: Volt LUT updated to %u\n", new_volt);
-}
+		data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, new_volt / 1000);
 
-// REG_PERF_STATE も試す
-data = readl_relaxed(c->base + offsets[REG_PERF_STATE] + i * lut_row_size);
-data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, new_volt / 1000);
-writel_relaxed(data, c->base + offsets[REG_PERF_STATE] + i * lut_row_size);
-
+// 強制的に書き換え
+		writel_relaxed(data, c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
 
 
 		if (src)
