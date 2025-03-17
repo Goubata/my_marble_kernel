@@ -41,8 +41,6 @@
 #define CYCLE_CNTR_OFFSET(core_id, m, acc_count)		\
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
-#define VOLTAGE_SCALE_FACTOR 95  // 95% に固定
-
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 static bool ukee_overclock = true;
 #endif
@@ -456,7 +454,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 	struct device *dev = &pdev->dev, *cpu_dev;
 	u32 data, src, lval, i, core_count, prev_cc, prev_freq, freq, volt;
 	unsigned long cpu;
-	uint32_t new_volt;  
 
 	c->table = devm_kcalloc(dev, lut_max_entries + 1,
 				sizeof(*c->table), GFP_KERNEL);
@@ -477,17 +474,10 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 
 		if (of_device_is_compatible(dev->of_node, "qcom,cpufreq-hw-epss"))
 			core_count = FIELD_GET(GENMASK(19, 16), data);
-			
-		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
+
+		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] +
+				      i * lut_row_size);
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
-
-// 92% にスケールダウン
-		new_volt = (volt * VOLTAGE_SCALE_FACTOR) / 100;
-		data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, new_volt / 1000);
-
-// 強制的に書き換え
-		writel_relaxed(data, c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
-
 
 		if (src)
 			freq = xo_rate * lval / 1000;
@@ -703,28 +693,58 @@ static int qcom_resources_init(struct platform_device *pdev)
 
 static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 {
-	int rc, cpu;
+    int rc, cpu;
+    struct cpufreq_qcom *c;
 
-	/* Get the bases of cpufreq for domains */
-	rc = qcom_resources_init(pdev);
-	if (rc) {
-		dev_err(&pdev->dev, "CPUFreq resource init failed\n");
-		return rc;
-	}
+    
+    rc = qcom_resources_init(pdev);
+    if (rc) {
+        dev_err(&pdev->dev, "CPUFreq resource init failed\n");
+        return rc;
+    }
 
-	for_each_possible_cpu(cpu)
-		spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
+    for_each_possible_cpu(cpu)
+        spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
 
-	rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
-	if (rc) {
-		dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
-		return rc;
-	}
+  
+    c = qcom_freq_domain_map[0]; 
+    if (!c || !c->pdmem_base) {
+        dev_err(&pdev->dev, "Failed to get pdmem_base\n");
+        return -ENODEV;
+    }
 
-	of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
-	dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
+    pr_info("PDMEM base address: %p\n", c->pdmem_base);
 
-	return 0;
+ 
+    u32 orig_v0 = readl_relaxed(c->pdmem_base + 0x04);
+    u32 orig_v1 = readl_relaxed(c->pdmem_base + 0x08);
+    u32 orig_v2 = readl_relaxed(c->pdmem_base + 0x0C);
+
+   
+    u32 new_v0 = (orig_v0 * 95) / 100;
+    u32 new_v1 = (orig_v1 * 95) / 100;
+    u32 new_v2 = (orig_v2 * 95) / 100;
+
+  
+    writel_relaxed(new_v0, c->pdmem_base + 0x04);
+    writel_relaxed(new_v1, c->pdmem_base + 0x08);
+    writel_relaxed(new_v2, c->pdmem_base + 0x0C);
+    mb();  
+
+    pr_info("PDMEM Voltage Updated: V0 = %u -> %u, V1 = %u -> %u, V2 = %u -> %u\n",
+            orig_v0, new_v0, orig_v1, new_v1, orig_v2, new_v2);
+
+    
+    rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
+    if (rc) {
+        dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
+        return rc;
+    }
+
+    of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+    pr_info("QCOM CPUFreq HW driver initialized\n");
+
+    return 0;
 }
 
 static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
