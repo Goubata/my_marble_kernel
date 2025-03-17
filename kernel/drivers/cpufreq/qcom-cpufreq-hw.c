@@ -41,6 +41,8 @@
 #define CYCLE_CNTR_OFFSET(core_id, m, acc_count)		\
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
+#define VOLTAGE_SCALE_FACTOR 92  // 92% に固定
+
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 static bool ukee_overclock = true;
 #endif
@@ -475,9 +477,16 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		if (of_device_is_compatible(dev->of_node, "qcom,cpufreq-hw-epss"))
 			core_count = FIELD_GET(GENMASK(19, 16), data);
 
-		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] +
-				      i * lut_row_size);
+		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
+
+// 92% にスケールダウン
+		uint32_t new_volt = (volt * VOLTAGE_SCALE_FACTOR) / 100;
+		data = (data & ~LUT_VOLT) | FIELD_PREP(LUT_VOLT, new_volt / 1000);
+
+// 強制的に書き換え
+		writel_relaxed(data, c->base + offsets[REG_VOLT_LUT] + i * lut_row_size);
+
 
 		if (src)
 			freq = xo_rate * lval / 1000;
