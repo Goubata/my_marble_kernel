@@ -61,6 +61,14 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 				cc_cdev->map_freq[state].frequency[idx]);
 		if (ret < 0)
 			return ret;
+
+		/* 🔹 UV（アンダーボルティング）を適用 */
+		unsigned long uv_voltage = (cc_cdev->map_freq[state].volt * 95) / 100;
+		ret = dev_pm_opp_set_voltage(cdev->dev, uv_voltage * 1000);
+		if (ret < 0)
+			pr_err("Failed to apply UV: %d\n", ret);
+		else
+			pr_info("UV Applied dynamically: %lu mV\n", uv_voltage);
 	}
 	return 0;
 }
@@ -114,10 +122,14 @@ static int fetch_opp_table(struct device *dev,
 			goto fetch_err_exit;
 		}
 		freq_table[idx].frequency = freq / 1000; //MHz
-		freq_table[idx].volt = dev_pm_opp_get_voltage(opp) / 1000; //mV
-		pr_debug("%d: freq:%lu Mhz volt:%lu mv\n", idx,
+		unsigned long original_volt = dev_pm_opp_get_voltage(opp) / 1000;
+		freq_table[idx].volt = (original_volt * 95) / 100; // 🔹 UV 適用
+
+		pr_debug("%d: freq:%lu Mhz volt:%lu mv -> %lu mV (UV)\n", idx,
 				freq_table[idx].frequency,
+				original_volt,
 				freq_table[idx].volt);
+
 		dev_pm_opp_put(opp);
 	}
 	*freq_table_inp = freq_table;
@@ -127,6 +139,7 @@ fetch_err_exit:
 	kfree(freq_table);
 	return -EINVAL;
 }
+
 
 static int build_unified_table(struct cc_limits_data *cc_cdev,
 		struct limits_freq_table **table, int *table_ct,
