@@ -15,6 +15,9 @@
 #include <linux/pm_opp.h>
 #include <linux/regulator/consumer.h>
 #include <linux/pm_qos.h>
+#include <linux/device.h>            // 🔹 `get_cpu_device()` のために追加
+#include <linux/of.h>                // 🔹 `device_node` のために追加
+#include <linux/of_platform.h>   
 
 #define CPU_MAP_CT 2
 #define CC_CDEV_DRIVER "CPU-voltage-cdev"
@@ -49,7 +52,7 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 {
     struct cc_limits_data *cc_cdev = cdev->devdata;
     int idx = 0, ret = 0;
-    unsigned long uv_voltage;  
+    unsigned long uv_voltage;
     struct regulator *cpu_regulator;
     struct device *cpu_dev;
 
