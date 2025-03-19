@@ -137,6 +137,7 @@ static int fetch_opp_table(struct device *dev,
 	struct limits_freq_table *freq_table = NULL;
 	struct dev_pm_opp *opp;
 	unsigned long freq = 0;
+	unsigned long original_volt;
 
 	max_opp_ct = dev_pm_opp_get_opp_count(dev);
 	if (max_opp_ct <= 0)
@@ -152,9 +153,9 @@ static int fetch_opp_table(struct device *dev,
 			pr_err("Error fetching freq\n");
 			goto fetch_err_exit;
 		}
-		freq_table[idx].frequency = freq / 1000; //MHz
-		unsigned long original_volt = dev_pm_opp_get_voltage(opp) / 1000;
-		freq_table[idx].volt = (original_volt * 95) / 100; // ðŸ”¹ UV é©ç”¨
+		original_volt = dev_pm_opp_get_voltage(opp) / 1000;
+		freq_table[idx].frequency = freq / 1000; // MHz
+		freq_table[idx].volt = (original_volt * 95) / 100; // UV適用
 
 		pr_debug("%d: freq:%lu Mhz volt:%lu mv -> %lu mV (UV)\n", idx,
 				freq_table[idx].frequency,
@@ -166,11 +167,11 @@ static int fetch_opp_table(struct device *dev,
 	*freq_table_inp = freq_table;
 
 	return max_opp_ct;
+
 fetch_err_exit:
 	kfree(freq_table);
 	return -EINVAL;
 }
-
 
 static int build_unified_table(struct cc_limits_data *cc_cdev,
 		struct limits_freq_table **table, int *table_ct,
