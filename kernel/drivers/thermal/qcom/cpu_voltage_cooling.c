@@ -13,6 +13,7 @@
 #include <linux/platform_device.h>
 #include <linux/cpu.h>
 #include <linux/pm_opp.h>
+#include <linux/regulator/consumer.h>
 #include <linux/pm_qos.h>
 
 #define CPU_MAP_CT 2
@@ -41,12 +42,15 @@ struct cc_limits_data {
 static DEFINE_MUTEX(cc_list_lock);
 static LIST_HEAD(cc_cdev_list);
 
+#include <linux/regulator/consumer.h>  // 🔹 必要なヘッダを追加
+
 static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long state)
 {
 	struct cc_limits_data *cc_cdev = cdev->devdata;
 	int idx = 0, ret = 0;
-	unsigned long uv_voltage;
+	unsigned long uv_voltage;  // 🔹 C99エラーを回避するために先に宣言
+	struct regulator *cpu_regulator;  // 🔹 レギュレータ構造体を追加
 
 	if (state > cc_cdev->map_freq_ct)
 		return -EINVAL;
@@ -56,7 +60,14 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 
 	cc_cdev->thermal_state = state;
 
-	for (idx = 0; (idx < CPU_MAP_CT) && (cc_cdev->cpu_map[idx] != -1) ; idx++) {
+	// 🔹 CPUレギュレータの取得
+	cpu_regulator = regulator_get(cdev->dev, "vdd-cpu");
+	if (IS_ERR(cpu_regulator)) {
+		pr_err("Failed to get CPU regulator\n");
+		return PTR_ERR(cpu_regulator);
+	}
+
+	for (idx = 0; (idx < CPU_MAP_CT) && (cc_cdev->cpu_map[idx] != -1); idx++) {
 		pr_debug("Mitigate CPU:%d to freq:%lu\n", cc_cdev->cpu_map[idx],
 				cc_cdev->map_freq[state].frequency[idx]);
 
@@ -66,18 +77,21 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 			return ret;
 
 		/* 🔹 UV（アンダーボルティング）を適用 */
-		uv_voltage = (cc_cdev->map_freq[state].frequency[idx] * 95) / 100; 
+		uv_voltage = (cc_cdev->map_freq[state].frequency[idx] * 95) / 100;
 
-		// CPU のレギュレータ電圧を変更
-		ret = regulator_set_voltage(cc_cdev->cdev, uv_voltage * 1000, uv_voltage * 1000);
+		// 🔹 CPU のレギュレータ電圧を変更
+		ret = regulator_set_voltage(cpu_regulator, uv_voltage * 1000, uv_voltage * 1000);
 		if (ret < 0)
 			pr_err("Failed to apply UV: %d\n", ret);
 		else
 			pr_info("UV Applied dynamically: %lu mV\n", uv_voltage);
 	}
+
+	// 🔹 レギュレータのリリース
+	regulator_put(cpu_regulator);
+
 	return 0;
 }
-
 
 static int cc_get_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long *state)
