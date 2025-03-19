@@ -46,6 +46,8 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 {
 	struct cc_limits_data *cc_cdev = cdev->devdata;
 	int idx = 0, ret = 0;
+	unsigned long uv_voltage;
+
 	if (state > cc_cdev->map_freq_ct)
 		return -EINVAL;
 
@@ -57,14 +59,17 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 	for (idx = 0; (idx < CPU_MAP_CT) && (cc_cdev->cpu_map[idx] != -1) ; idx++) {
 		pr_debug("Mitigate CPU:%d to freq:%lu\n", cc_cdev->cpu_map[idx],
 				cc_cdev->map_freq[state].frequency[idx]);
+
 		ret = freq_qos_update_request(&cc_cdev->cc_qos_req[idx],
 				cc_cdev->map_freq[state].frequency[idx]);
 		if (ret < 0)
 			return ret;
 
 		/* 🔹 UV（アンダーボルティング）を適用 */
-		unsigned long uv_voltage = (cc_cdev->map_freq[state].volt * 95) / 100;
-		ret = dev_pm_opp_set_voltage(cdev->dev, uv_voltage * 1000);
+		uv_voltage = (cc_cdev->map_freq[state].frequency[idx] * 95) / 100; 
+
+		// CPU のレギュレータ電圧を変更
+		ret = regulator_set_voltage(cc_cdev->cdev, uv_voltage * 1000, uv_voltage * 1000);
 		if (ret < 0)
 			pr_err("Failed to apply UV: %d\n", ret);
 		else
@@ -72,6 +77,7 @@ static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 	}
 	return 0;
 }
+
 
 static int cc_get_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long *state)
@@ -123,7 +129,7 @@ static int fetch_opp_table(struct device *dev,
 		}
 		freq_table[idx].frequency = freq / 1000; //MHz
 		unsigned long original_volt = dev_pm_opp_get_voltage(opp) / 1000;
-		freq_table[idx].volt = (original_volt * 95) / 100; // 🔹 UV 適用
+		freq_table[idx].volt = (original_volt * 95) / 100; // ðŸ”¹ UV é©ç”¨
 
 		pr_debug("%d: freq:%lu Mhz volt:%lu mv -> %lu mV (UV)\n", idx,
 				freq_table[idx].frequency,
