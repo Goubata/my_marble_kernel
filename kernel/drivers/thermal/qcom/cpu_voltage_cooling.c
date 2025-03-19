@@ -42,8 +42,6 @@ struct cc_limits_data {
 static DEFINE_MUTEX(cc_list_lock);
 static LIST_HEAD(cc_cdev_list);
 
-#include <linux/regulator/consumer.h>  // 🔹 必要なヘッダを追加
-
 static int cc_set_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long state)
 {
