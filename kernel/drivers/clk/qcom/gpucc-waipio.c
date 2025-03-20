@@ -102,11 +102,11 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 			.vdd_class = &vdd_mxc,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000},
+				[VDD_LOWER_D1] = 400000000,  // 500MHz → 400MHz
+				[VDD_LOWER] = 550000000,  // 615MHz → 550MHz
+				[VDD_LOW] = 1000000000,  // 1066MHz → 1000MHz
+				[VDD_LOW_L1] = 1400000000,  // 1500MHz → 1400MHz
+				[VDD_NOMINAL] = 1600000000  // 1750MHz → 1600MHz
 		},
 	},
 };
@@ -150,12 +150,11 @@ static struct clk_alpha_pll gpu_cc_pll1 = {
 			.vdd_class = &vdd_mx,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000},
+				[VDD_LOWER_D1] = 400000000,  // 500MHz → 400MHz
+				[VDD_LOWER] = 550000000,  // 615MHz → 550MHz
+				[VDD_LOW] = 1000000000,  // 1066MHz → 1000MHz
+				[VDD_LOW_L1] = 1400000000,  // 1500MHz → 1400MHz
+				[VDD_NOMINAL] = 1600000000  // 1750MHz → 1600MHz
 		},
 	},
 };
@@ -241,7 +240,7 @@ static struct clk_rcg2 gpu_cc_ff_clk_src = {
 static const struct freq_tbl ftbl_gpu_cc_gmu_clk_src[] = {
 	F(19200000, P_BI_TCXO, 1, 0, 0),
 	F(200000000, P_GPLL0_OUT_MAIN_DIV, 1.5, 0, 0),
-	F(500000000, P_GPU_CC_PLL1_OUT_MAIN, 1, 0, 0), // ここを 1.5 から 1 に修正して無駄なクロックを削減
+	F(400000000, P_GPU_CC_PLL1_OUT_MAIN, 1, 0, 0), // ここを 1.5 から 1 に修正して無駄なクロックを削減
 	{ }
 };
 
@@ -818,7 +817,7 @@ static void __maybe_unused gpu_cc_cape_fixup(struct regmap *regmap)
 	gpu_cc_pll0_config.alpha = 0xB000;
 	gpu_cc_pll0_config.config_ctl_val = 0x20485699;
 	gpu_cc_pll0_config.config_ctl_hi_val = 0x00182261;
-	gpu_cc_pll0_config.config_ctl_hi1_val = 0x82AA299C;
+	gpu_cc_pll0_config.config_ctl_hi1_val = 0x22AA199C;  // 低消費電力設定
 	gpu_cc_pll0_config.test_ctl_val = 0x00000000;
 	gpu_cc_pll0_config.test_ctl_hi_val = 0x00000003;
 	gpu_cc_pll0_config.test_ctl_hi1_val = 0x00009000;
