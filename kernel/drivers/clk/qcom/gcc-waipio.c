@@ -25,8 +25,8 @@
 #include "reset.h"
 #include "vdd-level.h"
 
-static DEFINE_VDD_REGULATORS(vdd_cx, VDD_HIGH_L1 + 1, 1, vdd_corner);
-static DEFINE_VDD_REGULATORS(vdd_mxa, VDD_HIGH_L1 + 1, 1, vdd_corner);
+static DEFINE_VDD_REGULATORS(vdd_cx, VDD_NOMINAL + 1, 1, vdd_corner);
+static DEFINE_VDD_REGULATORS(vdd_mxa, VDD_NOMINAL + 1, 1, vdd_corner);
 
 static struct clk_vdd_class *gcc_waipio_regulators[] = {
 	&vdd_cx,
@@ -79,12 +79,12 @@ static struct clk_alpha_pll gcc_gpll0 = {
 			.vdd_class = &vdd_cx,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000},
+				[VDD_LOWER_D1] = 1000000000,  // 500MHz → 1GHz
+				[VDD_LOWER] = 1500000000,     // 615MHz → 1.5GHz
+				[VDD_LOW] = 2000000000,       // 1.066GHz → 2GHz
+				[VDD_LOW_L1] = 2500000000,    // 1.5GHz → 2.5GHz
+				[VDD_NOMINAL] = 2750000000,   // 1.75GHz → 2.75GHz
+				[VDD_HIGH] = 3000000000},     // 2GHz → 3GHz    
 		},
 	},
 };
@@ -138,10 +138,10 @@ static struct clk_alpha_pll gcc_gpll2 = {
 			.vdd_class = &vdd_cx,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 615000000,
-				[VDD_LOW] = 1100000000,
-				[VDD_LOW_L1] = 1600000000,
-				[VDD_NOMINAL] = 2000000000},
+				[VDD_LOWER_D1] = 1500000000,  // 1.3GHz → 1.5GHz
+				[VDD_LOW] = 2000000000,       // 1.8GHz → 2.0GHz
+				[VDD_LOW_L1] = 2500000000,    // 2.3GHz → 2.5GHz
+				[VDD_NOMINAL] = 3000000000},
 		},
 	},
 };
@@ -164,10 +164,10 @@ static struct clk_alpha_pll gcc_gpll3 = {
 			.vdd_class = &vdd_cx,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 615000000,
-				[VDD_LOW] = 1100000000,
-				[VDD_LOW_L1] = 1600000000,
-				[VDD_NOMINAL] = 2000000000},
+				[VDD_LOWER_D1] = 1300000000,  // 1.0GHz → 1.3GHz
+				[VDD_LOW] = 1800000000,       // 1.5GHz → 1.8GHz
+				[VDD_LOW_L1] = 2300000000,    // 2.0GHz → 2.3GHz
+				[VDD_NOMINAL] = 2750000000},  // 2.5GHz → 2.75GHz    
 		},
 	},
 };
@@ -200,12 +200,12 @@ static struct clk_alpha_pll gcc_gpll4 = {
 			.vdd_class = &vdd_cx,
 			.num_rate_max = VDD_NUM,
 			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000},
+				[VDD_LOWER_D1] = 1000000000,  // 500MHz → 1GHz
+				[VDD_LOWER] = 1500000000,     // 615MHz → 1.5GHz
+				[VDD_LOW] = 2000000000,       // 1.066GHz → 2GHz
+				[VDD_LOW_L1] = 2500000000,    // 1.5GHz → 2.5GHz
+				[VDD_NOMINAL] = 2750000000,   // 1.75GHz → 2.75GHz
+				[VDD_HIGH] = 3000000000},     // 2GHz → 3GHz    
 		},
 	},
 };
@@ -236,14 +236,13 @@ static struct clk_alpha_pll gcc_gpll9 = {
 		},
 		.vdd_data = {
 			.vdd_class = &vdd_cx,
-			.num_rate_max = VDD_NUM,
-			.rate_max = (unsigned long[VDD_NUM]) {
-				[VDD_LOWER_D1] = 500000000,
-				[VDD_LOWER] = 615000000,
-				[VDD_LOW] = 1066000000,
-				[VDD_LOW_L1] = 1500000000,
-				[VDD_NOMINAL] = 1750000000,
-				[VDD_HIGH] = 2000000000},
+			.num_rate_max = VDD_NUM,.rate_max = (unsigned long[VDD_NUM]) {
+				[VDD_LOWER_D1] = 1000000000,  // 500MHz → 1GHz
+				[VDD_LOWER] = 1500000000,     // 615MHz → 1.5GHz
+				[VDD_LOW] = 2000000000,       // 1.066GHz → 2GHz
+				[VDD_LOW_L1] = 2500000000,    // 1.5GHz → 2.5GHz
+				[VDD_NOMINAL] = 2750000000,   // 1.75GHz → 2.75GHz
+				[VDD_HIGH] = 3000000000},     // 2GHz → 3GHz
 		},
 	},
 };
