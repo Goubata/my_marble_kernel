@@ -106,7 +106,7 @@ static struct clk_alpha_pll gpu_cc_pll0 = {
 				[VDD_LOWER] = 550000000,  // 615MHz → 550MHz
 				[VDD_LOW] = 1000000000,  // 1066MHz → 1000MHz
 				[VDD_LOW_L1] = 1400000000,  // 1500MHz → 1400MHz
-				[VDD_NOMINAL] = 1600000000  // 1750MHz → 1600MHz
+				[VDD_NOMINAL] = 1600000000},  // 1750MHz → 1600MHz
 		},
 	},
 };
@@ -154,7 +154,7 @@ static struct clk_alpha_pll gpu_cc_pll1 = {
 				[VDD_LOWER] = 550000000,  // 615MHz → 550MHz
 				[VDD_LOW] = 1000000000,  // 1066MHz → 1000MHz
 				[VDD_LOW_L1] = 1400000000,  // 1500MHz → 1400MHz
-				[VDD_NOMINAL] = 1600000000  // 1750MHz → 1600MHz
+				[VDD_NOMINAL] = 1600000000},  // 1750MHz → 1600MHz
 		},
 	},
 };
