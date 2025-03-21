@@ -25,8 +25,6 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 	int max_lvl = vdd_class->num_levels - 1;
 	int cur_base = cur_lvl * n_reg;
 	int new_base;
-	
-/* 変数宣言を関数の先頭に移動 */
 	int min_voltage;
 		min_voltage = INT_MAX;
 
