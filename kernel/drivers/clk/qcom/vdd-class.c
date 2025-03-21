@@ -27,7 +27,7 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 	int new_base;
 	
 /* 変数宣言を関数の先頭に移動 */
-	int i, min_voltage;
+	int min_voltage;
 		min_voltage = INT_MAX;
 
 /* 最低電圧を取得 */
@@ -147,7 +147,7 @@ int clk_get_vdd_voltage(struct clk_vdd_class_data *vdd_data, int vdd_level)
 
     /* 最低電圧を取得 */
 /* 変数宣言を関数の先頭に統一 */
-int i, min_voltage;
+int min_voltage;
 min_voltage = vdd_data->vdd_classes[0]->vdd_uv[0]; // 最小レベルを基準
 
 
