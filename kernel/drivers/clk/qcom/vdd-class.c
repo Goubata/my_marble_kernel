@@ -23,6 +23,7 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 	int n_reg = vdd_class->num_regulators;
 	int cur_lvl = vdd_class->cur_level;
 	int max_lvl = vdd_class->num_levels - 1;
+	int min_voltage = uv[0];
 	int cur_base = cur_lvl * n_reg;
 	int new_base;
 
@@ -38,7 +39,11 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 
 	for (i = 0; i < vdd_class->num_regulators; i++) {
 		pr_debug("Set voltage level %d\n", uv[new_base + i]);
-		ret = regulator_set_voltage(r[i], uv[new_base + i] - 50000, INT_MAX);
+
+		if (uv[new_base + i] - 50000 < min_voltage)
+	   	 ret = regulator_set_voltage(r[i], min_voltage, INT_MAX);
+	else
+    ret = regulator_set_voltage(r[i], uv[new_base + i] - 50000, INT_MAX);
 		if (ret)
 			goto set_voltage_fail;
 
@@ -130,9 +135,15 @@ int clk_get_vdd_voltage(struct clk_vdd_class_data *vdd_data, int vdd_level)
     if (vdd_data->vdd_class)
         corner = max(corner, vdd_data->vdd_class->vdd_uv[vdd_level]);
 
-    /* -50mV (50000µV) アンダーボルト */
+    /* 最低電圧を取得 */
+int min_voltage = vdd_data->vdd_classes[0]->vdd_uv[0]; // 最小レベルを基準
+
     if (corner > 50000)
         corner -= 50000;
+
+/* 最低電圧以下にならないようにする */
+    if (corner < min_voltage)
+        corner = min_voltage;    
 
     return corner;
 }
