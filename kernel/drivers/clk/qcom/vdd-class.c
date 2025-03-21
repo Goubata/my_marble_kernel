@@ -23,13 +23,13 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 	int n_reg = vdd_class->num_regulators;
 	int cur_lvl = vdd_class->cur_level;
 	int max_lvl = vdd_class->num_levels - 1;
+	int cur_base = cur_lvl * n_reg;
+	int new_base;
 	int min_voltage = INT_MAX;
 	for (int i = 0; i < vdd_class->num_levels * vdd_class->num_regulators; i++) {
 	    if (uv[i] < min_voltage)
         min_voltage = uv[i];
 }
-	int cur_base = cur_lvl * n_reg;
-	int new_base;
 
 	/* aggregate votes */
 	for (level = max_lvl; level > 0; level--)
