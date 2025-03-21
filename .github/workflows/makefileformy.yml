@@ -257,4 +257,4 @@ jobs:
             kernel/out/drivers/soc/qcom/dcvs/qcom-dcvs.ko
             kernel/out/drivers/clk/qcom/clk-rpmh.ko
             kernel/out/drivers/thermal/qcom/cpu_voltage_cooling.ko
-            kernel/out/drivers/clk/qcom/gcc-waipio.ko
+            kernel/out/drivers/clk/qcom/clk-qcom.ko
