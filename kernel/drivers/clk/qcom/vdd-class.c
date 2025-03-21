@@ -38,7 +38,7 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 
 	for (i = 0; i < vdd_class->num_regulators; i++) {
 		pr_debug("Set voltage level %d\n", uv[new_base + i]);
-		ret = regulator_set_voltage(r[i], uv[new_base + i], INT_MAX);
+		ret = regulator_set_voltage(r[i], uv[new_base + i] - 50000, INT_MAX);
 		if (ret)
 			goto set_voltage_fail;
 
@@ -122,16 +122,19 @@ static int clk_unvote_vdd_class_level(struct clk_vdd_class *vdd_class, int level
  */
 int clk_get_vdd_voltage(struct clk_vdd_class_data *vdd_data, int vdd_level)
 {
-	int i, corner = -EINVAL;
+    int i, corner = -EINVAL;
 
-	for (i = 0; i < vdd_data->num_vdd_classes; i++)
-		corner = max(corner, vdd_data->vdd_classes[i]->vdd_uv[vdd_level]);
+    for (i = 0; i < vdd_data->num_vdd_classes; i++)
+        corner = max(corner, vdd_data->vdd_classes[i]->vdd_uv[vdd_level]);
 
-	if (vdd_data->vdd_class)
-		corner = max(corner, vdd_data->vdd_class->vdd_uv[vdd_level]);
+    if (vdd_data->vdd_class)
+        corner = max(corner, vdd_data->vdd_class->vdd_uv[vdd_level]);
 
-	return corner;
+    /* -50mV (50000µV) アンダーボルト */
+    if (corner > 50000)
+        corner -= 50000;
 
+    return corner;
 }
 EXPORT_SYMBOL(clk_get_vdd_voltage);
 
