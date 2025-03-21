@@ -25,11 +25,17 @@ static int clk_aggregate_vdd(struct clk_vdd_class *vdd_class)
 	int max_lvl = vdd_class->num_levels - 1;
 	int cur_base = cur_lvl * n_reg;
 	int new_base;
-	int min_voltage = INT_MAX;
-	for (int i = 0; i < vdd_class->num_levels * vdd_class->num_regulators; i++) {
-	    if (uv[i] < min_voltage)
-        min_voltage = uv[i];
+	
+/* 変数宣言を関数の先頭に移動 */
+	int i, min_voltage;
+		min_voltage = INT_MAX;
+
+/* 最低電圧を取得 */
+	for (i = 0; i < vdd_class->num_levels * vdd_class->num_regulators; i++) {
+  	  if (uv[i] < min_voltage)
+	        min_voltage = uv[i];
 }
+
 
 	/* aggregate votes */
 	for (level = max_lvl; level > 0; level--)
@@ -140,7 +146,10 @@ int clk_get_vdd_voltage(struct clk_vdd_class_data *vdd_data, int vdd_level)
         corner = max(corner, vdd_data->vdd_class->vdd_uv[vdd_level]);
 
     /* 最低電圧を取得 */
-int min_voltage = vdd_data->vdd_classes[0]->vdd_uv[0]; // 最小レベルを基準
+/* 変数宣言を関数の先頭に統一 */
+int i, min_voltage;
+min_voltage = vdd_data->vdd_classes[0]->vdd_uv[0]; // 最小レベルを基準
+
 
     if (corner > 50000)
         corner -= 50000;
