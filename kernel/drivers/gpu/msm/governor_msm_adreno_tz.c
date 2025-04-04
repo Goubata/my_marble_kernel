@@ -532,7 +532,7 @@ static int tz_suspend(struct devfreq *devfreq)
 	__secure_tz_reset_entry2(scm_data, sizeof(scm_data), priv->is_64);
 
 	priv->bin.total_time = 0;
-	priv->bin.busy_time += (level * adrenoboost);	
+	priv->bin.busy_time = priv->bin.busy_time + (level * adrenoboost);
 	return 0;
 }
 
