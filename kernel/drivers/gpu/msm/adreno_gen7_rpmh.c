@@ -356,14 +356,8 @@ static int setup_gx_arc_votes(struct adreno_device *adreno_dev,
 	for (index = 1, i = pwr->num_pwrlevels - 1; i >= 0; i--, index++) {
 		u32 cx_vlvl = pwr->pwrlevels[i].cx_level;
 
-	if (pwr->pwrlevels[i].gpu_freq > 832000) {
- 	   pwr->pwrlevels[i].gpu_freq = 860000;   // 実際のクロックを 860MHz に設定
-    	table->gx_votes[index].freq = 831;     // RPMh には 831MHz と報告
-  	  vlvl_tbl[index] = pwr->pwrlevels[i - 1].voltage_level;  // 831MHz の電圧を適用
-	} else {
-	    table->gx_votes[index].freq = pwr->pwrlevels[i].gpu_freq / 1000;
-	    vlvl_tbl[index] = pwr->pwrlevels[i].voltage_level;
-	}
+		vlvl_tbl[index] = pwr->pwrlevels[i].voltage_level;
+		table->gx_votes[index].freq = pwr->pwrlevels[i].gpu_freq / 1000;
 
 		ret = to_cx_hlvl(cx_rail, cx_vlvl,
 				&table->gx_votes[index].cx_vote);
