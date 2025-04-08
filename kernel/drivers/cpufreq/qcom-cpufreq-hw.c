@@ -478,7 +478,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		data = readl_relaxed(c->base + offsets[REG_VOLT_LUT] +
 				      i * lut_row_size);
 		volt = FIELD_GET(LUT_VOLT, data) * 1000;
-		volt = (volt * 96) / 100; 
 
 		if (src)
 			freq = xo_rate * lval / 1000;
