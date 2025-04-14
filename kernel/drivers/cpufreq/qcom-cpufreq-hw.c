@@ -6,16 +6,8 @@
 #include <linux/bitfield.h>
 #include <linux/cpufreq.h>
 #include <linux/cpu_cooling.h>
-#include <linux/platform_device.h>
 #include <linux/energy_model.h>
-#include <linux/delay.h>
-#include <linux/regulator/consumer.h>  // ← 追加！
-#include <linux/regulator/rpmh-regulator.h>
 #include <linux/init.h>
-#include <linux/device.h>   // デバイス関連の API (sysfs 含む)
-#include <linux/sysfs.h>    // sysfs 操作 (`device_create_file()` など)
-#include <linux/fs.h>       // ファイルシステム関連 (`device_create_file()` で必要)
-#include <linux/uaccess.h>  // ユーザー空間データの処理 (`kstrtoul()` で必要)
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -23,10 +15,6 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
-#include <linux/of.h>
-#include <linux/clk.h>
-#include <linux/err.h>
-#include <linux/io.h>
 #include <linux/pm_opp.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
@@ -40,8 +28,6 @@
 #include <trace/events/dcvsh.h>
 
 #define LUT_MAX_ENTRIES			40U
-#define MIN_VOLTAGE			400
-#define MAX_VOLTAGE			1200
 #define LUT_SRC				GENMASK(31, 30)
 #define LUT_L_VAL			GENMASK(7, 0)
 #define LUT_CORE_COUNT			GENMASK(18, 16)
@@ -56,7 +42,8 @@
 			(acc_count ? ((core_id + 1) * 4) : 0)
 
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
-static bool ukee_overclock = true;
+static bool ukee_overclock = false;
+module_param(ukee_overclock, bool, S_IRUGO);
 #endif
 
 enum {
@@ -86,7 +73,6 @@ struct cpufreq_qcom {
 	void __iomem *pdmem_base;
 	cpumask_t related_cpus;
 	unsigned long dcvsh_freq_limit;
-	struct rpmh_vreg *vreg;
 	struct delayed_work freq_poll_work;
 	struct mutex dcvsh_lock;
 	struct device_attribute freq_limit_attr;
@@ -122,10 +108,6 @@ static const u16 cpufreq_qcom_epss_std_offsets[REG_ARRAY_SIZE] = {
 	[REG_INTR_CLR]		= 0x308,
 	[REG_INTR_STATUS]	= 0x30C,
 };
-
-MODULE_ALIAS("platform:qcom,cpufreq-hw");
-MODULE_ALIAS("platform:qcom,cpufreq-hw-epss");
-MODULE_ALIAS("platform:soc/qcom,cpufreq-hw"); // 追加
 
 static struct cpufreq_qcom *qcom_freq_domain_map[NR_CPUS];
 static struct cpufreq_counter qcom_cpufreq_counter[NR_CPUS];
@@ -278,111 +260,6 @@ u64 qcom_cpufreq_get_cpu_cycle_counter(int cpu)
 }
 EXPORT_SYMBOL_GPL(qcom_cpufreq_get_cpu_cycle_counter);
 
-static ssize_t cpu_voltage_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-    struct cpufreq_qcom *c = dev_get_drvdata(dev);
-    u32 volt;
-
-    pr_info("cpu_voltage_show: Function called\n");
-
-    if (!c) {
-        pr_err("cpu_voltage_show: cpufreq_qcom struct is NULL (dev=%p)\n", dev);
-        return -ENODEV;
-    }
-
-    if (!c->base) {
-        pr_err("cpu_voltage_show: c->base is NULL\n");
-        return -ENODEV;
-    }
-
-    pr_info("cpu_voltage_show: REG_VOLT_LUT offset = 0x%x\n", offsets[REG_VOLT_LUT]);
-
-    volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
-    pr_info("cpu_voltage_show: Read voltage = %u\n", volt);
-
-    return scnprintf(buf, PAGE_SIZE, "%u\n", volt);
-}
-
-
-static ssize_t cpu_voltage_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-    struct cpufreq_qcom *c = dev_get_drvdata(dev);
-    struct rpmh_vreg *vreg;
-    unsigned long new_volt;
-    int ret, retries;
-    u32 current_volt, check_volt;
-
-    pr_info("cpu_voltage_store: Function called\n");
-
-    if (!c) {
-        pr_err("cpu_voltage_store: cpufreq_qcom struct is NULL (dev=%p)\n", dev);
-        return -ENODEV;
-    }
-
-    if (!c->base) {
-        pr_err("cpu_voltage_store: c->base is NULL\n");
-        return -ENODEV;
-    }
-
-    vreg = c->vreg;
-    if (!vreg) {
-        pr_err("cpu_voltage_store: vreg is NULL, cannot update voltage\n");
-        return -ENODEV;
-    }
-
-    ret = kstrtoul(buf, 10, &new_volt);
-    if (ret) {
-        pr_err("cpu_voltage_store: Failed to parse voltage value: %s\n", buf);
-        return ret;
-    }
-
-    if (new_volt < MIN_VOLTAGE || new_volt > MAX_VOLTAGE) {
-        pr_err("cpu_voltage_store: Voltage out of range: %lu\n", new_volt);
-        return -EINVAL;
-    }
-
-    current_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
-    pr_info("cpu_voltage_store: Current voltage = %u, New voltage = %lu\n", current_volt, new_volt);
-
-    if (current_volt == new_volt) {
-        pr_info("cpu_voltage_store: Voltage is already %lu, skipping update\n", new_volt);
-        return count;
-    }
-
-    pr_info("cpu_voltage_store: Writing voltage: %lu\n", new_volt);
-    writel(new_volt, c->base + offsets[REG_VOLT_LUT]);
-    mb();  // メモリバリア
-
-    retries = 10;
-    while (retries--) {
-        msleep(1);
-        check_volt = readl_relaxed(c->base + offsets[REG_VOLT_LUT]);
-
-        if (check_volt == new_volt) {
-            pr_info("cpu_voltage_store: Voltage successfully updated to %u\n", check_volt);
-            break;
-        }
-    }
-
-    if (retries == 0) {
-        pr_err("cpu_voltage_store: Voltage change did not take effect! Expected: %lu, Read: %u\n", new_volt, check_volt);
-        return -EIO;
-    }
-
-    pr_info("cpu_voltage_store: Calling rpmh_regulator_send_aggregate_requests\n");
-    rpmh_regulator_send_aggregate_requests(vreg);
-
-    cpufreq_update_policy(cpumask_first(&c->related_cpus));
-
-    pr_info("cpu_voltage_store: Voltage update completed\n");
-
-    return count;
-}
-
-
-
-static DEVICE_ATTR_RW(cpu_voltage);
-
 static int
 qcom_cpufreq_hw_target_index(struct cpufreq_policy *policy,
 			     unsigned int index)
@@ -433,76 +310,66 @@ qcom_cpufreq_hw_fast_switch(struct cpufreq_policy *policy,
 
 static int qcom_cpufreq_hw_cpu_init(struct cpufreq_policy *policy)
 {
-    struct cpufreq_qcom *c;
-    struct device *cpu_dev;
-    int ret;
+	struct cpufreq_qcom *c;
+	struct device *cpu_dev;
+	int ret;
 
-    cpu_dev = get_cpu_device(policy->cpu);
-    if (!cpu_dev) {
-        pr_err("%s: failed to get cpu%d device\n", __func__, policy->cpu);
-        return -ENODEV;
-    }
+	cpu_dev = get_cpu_device(policy->cpu);
+	if (!cpu_dev) {
+		pr_err("%s: failed to get cpu%d device\n", __func__,
+				policy->cpu);
+		return -ENODEV;
+	}
 
-    c = qcom_freq_domain_map[policy->cpu];
-    if (!c) {
-        pr_err("No scaling support for CPU%d, qcom_freq_domain_map is NULL\n", policy->cpu);
-        return -ENODEV;
-    }
+	c = qcom_freq_domain_map[policy->cpu];
+	if (!c) {
+		pr_err("No scaling support for CPU%d\n", policy->cpu);
+		return -ENODEV;
+	}
 
-    cpumask_copy(policy->cpus, &c->related_cpus);
+	cpumask_copy(policy->cpus, &c->related_cpus);
 
-    ret = dev_pm_opp_get_opp_count(cpu_dev);
-    if (ret <= 0)
-        dev_err(cpu_dev, "OPP table is not ready\n");
+	ret = dev_pm_opp_get_opp_count(cpu_dev);
+	if (ret <= 0)
+		dev_err(cpu_dev, "OPP table is not ready\n");
 
-    policy->freq_table = c->table;
-    policy->driver_data = c->base;
-    policy->fast_switch_possible = true;
-    policy->dvfs_possible_from_any_cpu = true;
+	policy->freq_table = c->table;
+	policy->driver_data = c->base;
+	policy->fast_switch_possible = true;
+	policy->dvfs_possible_from_any_cpu = true;
 
-    dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
+	dev_pm_opp_of_register_em(cpu_dev, policy->cpus);
 
-    /* 🔹 OC ハック (dcvsh_freq_limit の sysfs を維持) */
-    if (c->dcvsh_irq > 0 && !c->is_irq_requested) {
-        snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name), "dcvsh-irq-%d", policy->cpu);
-        ret = devm_request_threaded_irq(cpu_dev, c->dcvsh_irq, NULL,
-            dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT | IRQF_NO_SUSPEND,
-            c->dcvsh_irq_name, c);
-        if (ret) {
-            dev_err(cpu_dev, "Failed to register irq %d\n", ret);
-            return ret;
-        }
+	if (c->dcvsh_irq > 0 && !c->is_irq_requested) {
+		snprintf(c->dcvsh_irq_name, sizeof(c->dcvsh_irq_name),
+					"dcvsh-irq-%d", policy->cpu);
+		ret = devm_request_threaded_irq(cpu_dev, c->dcvsh_irq, NULL,
+			dcvsh_handle_isr, IRQF_TRIGGER_HIGH | IRQF_ONESHOT |
+			IRQF_NO_SUSPEND, c->dcvsh_irq_name, c);
+		if (ret) {
+			dev_err(cpu_dev, "Failed to register irq %d\n", ret);
+			return ret;
+		}
 
-        ret = irq_set_affinity_hint(c->dcvsh_irq, &c->related_cpus);
-        if (ret)
-            dev_err(cpu_dev, "Failed to set affinity for irq %d\n", c->dcvsh_irq);
+		ret = irq_set_affinity_hint(c->dcvsh_irq, &c->related_cpus);
+		if (ret)
+			dev_err(cpu_dev, "Failed to set affinity for irq %d\n",
+					c->dcvsh_irq);
 
-        c->is_irq_requested = true;
-        writel_relaxed(0x0, c->base + offsets[REG_INTR_CLR]);
-        c->is_irq_enabled = true;
+		c->is_irq_requested = true;
+		writel_relaxed(0x0, c->base + offsets[REG_INTR_CLR]);
+		c->is_irq_enabled = true;
 
-        sysfs_attr_init(&c->freq_limit_attr.attr);
-        c->freq_limit_attr.attr.name = "dcvsh_freq_limit";
-        c->freq_limit_attr.show = dcvsh_freq_limit_show;
-        c->freq_limit_attr.attr.mode = 0444;
-        c->dcvsh_freq_limit = U32_MAX;
-        device_create_file(cpu_dev, &c->freq_limit_attr);
-    }
+		sysfs_attr_init(&c->freq_limit_attr.attr);
+		c->freq_limit_attr.attr.name = "dcvsh_freq_limit";
+		c->freq_limit_attr.show = dcvsh_freq_limit_show;
+		c->freq_limit_attr.attr.mode = 0444;
+		c->dcvsh_freq_limit = U32_MAX;
+		device_create_file(cpu_dev, &c->freq_limit_attr);
+	}
 
-    /* 🔹 `dev_set_drvdata()` を追加 (重要) */
-    dev_set_drvdata(cpu_dev, c);
-    pr_info("qcom_cpufreq_hw_cpu_init: Set drvdata for CPU%d (c=%p, base=%p)\n", policy->cpu, c, c->base);
-
-    /* 🔹 sysfs `cpu_voltage` の登録 */
-    ret = device_create_file(cpu_dev, &dev_attr_cpu_voltage);
-    if (ret)
-        pr_err("Failed to create cpu_voltage sysfs entry for CPU%d (error %d)\n", policy->cpu, ret);
-    else
-        pr_info("Successfully created cpu_voltage sysfs entry for CPU%d\n", policy->cpu);
-
-    return 0;
+	return 0;
 }
-
 
 static struct freq_attr *qcom_cpufreq_hw_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
@@ -642,19 +509,14 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (ukee_overclock) {
 		if (cpu == 0) {
-			c->table[i++].frequency = 1804000;
 			c->table[i++].frequency = 1920000;
 			c->table[i++].frequency = 2016000;
-			c->table[i++].frequency = 2323200;
 		} else if (cpu == 4) {
-			c->table[i++].frequency = 2500000;
 			c->table[i++].frequency = 2572800;
 			c->table[i++].frequency = 2649600;
 			c->table[i++].frequency = 2745600;
-			c->table[i++].frequency = 2865600;
 		} else if (cpu == 7) {
-			c->table[i++].frequency = 3000000;
-			c->table[i++].frequency = 3200200;
+			c->table[i++].frequency = 2995200;
 		}
 	}
 #endif
@@ -827,53 +689,28 @@ static int qcom_resources_init(struct platform_device *pdev)
 
 static int qcom_cpufreq_hw_driver_probe(struct platform_device *pdev)
 {
-    int rc, cpu;
-    struct cpufreq_qcom *c;
-    struct device *dev = &pdev->dev;
-    struct regulator *vreg;  // ← 修正！
+	int rc, cpu;
 
-    pr_info("qcom_cpufreq_hw_driver_probe: Function called\n");
+	/* Get the bases of cpufreq for domains */
+	rc = qcom_resources_init(pdev);
+	if (rc) {
+		dev_err(&pdev->dev, "CPUFreq resource init failed\n");
+		return rc;
+	}
 
-    /* CPUFreq のリソースを初期化 */
-    rc = qcom_resources_init(pdev);
-    if (rc) {
-        dev_err(&pdev->dev, "CPUFreq resource init failed\n");
-        return rc;
-    }
+	for_each_possible_cpu(cpu)
+		spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
 
-    /* メモリ確保 */
-    c = devm_kzalloc(dev, sizeof(*c), GFP_KERNEL);
-    if (!c)
-        return -ENOMEM;
+	rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
+	if (rc) {
+		dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
+		return rc;
+	}
 
-    /* `vreg` を取得 */
-    vreg = devm_regulator_get(dev, "cpu");  // ← 型を修正！
-    if (IS_ERR(vreg)) {
-        dev_err(&pdev->dev, "Failed to get CPU regulator\n");
-        return PTR_ERR(vreg);
-    }
-    pr_info("qcom_cpufreq_hw_driver_probe: Successfully got CPU regulator\n");
+	of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
 
-    c->vreg = (struct rpmh_vreg *)vreg;  // ← `struct regulator *` を代入
-
-    /* ドライバデータをセット */
-    platform_set_drvdata(pdev, c);
-
-    /* CPUごとのスピンロックを初期化 */
-    for_each_possible_cpu(cpu)
-        spin_lock_init(&qcom_cpufreq_counter[cpu].lock);
-
-    /* CPUFreq ドライバを登録 */
-    rc = cpufreq_register_driver(&cpufreq_qcom_hw_driver);
-    if (rc) {
-        dev_err(&pdev->dev, "CPUFreq HW driver failed to register\n");
-        return rc;
-    }
-
-    of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
-    dev_dbg(&pdev->dev, "QCOM CPUFreq HW driver initialized\n");
-
-    return 0;
+	return 0;
 }
 
 static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
@@ -902,11 +739,10 @@ static int qcom_cpufreq_hw_driver_remove(struct platform_device *pdev)
 
 static const struct of_device_id qcom_cpufreq_hw_match[] = {
 	{ .compatible = "qcom,cpufreq-hw", .data = &cpufreq_qcom_std_offsets },
-	{ .compatible = "qcom,cpufreq-hw-epss", .data = &cpufreq_qcom_epss_std_offsets },
-	{ .compatible = "soc/qcom,cpufreq-hw", .data = &cpufreq_qcom_std_offsets }, // 追加
+	{ .compatible = "qcom,cpufreq-hw-epss",
+				   .data = &cpufreq_qcom_epss_std_offsets },
 	{}
 };
-
 
 static struct platform_driver qcom_cpufreq_hw_driver = {
 	.probe = qcom_cpufreq_hw_driver_probe,
@@ -919,21 +755,9 @@ static struct platform_driver qcom_cpufreq_hw_driver = {
 
 static int __init qcom_cpufreq_hw_init(void)
 {
-    int ret;  // 先に宣言
-
-    pr_info("qcom_cpufreq_hw_init: called\n");
-
-    ret = platform_driver_register(&qcom_cpufreq_hw_driver);
-    if (ret) {
-        pr_err("qcom_cpufreq_hw_driver registration failed: %d\n", ret);
-    } else {
-        pr_info("qcom_cpufreq_hw_driver registered successfully\n");
-    }
-
-    return ret;
+	return platform_driver_register(&qcom_cpufreq_hw_driver);
 }
 subsys_initcall(qcom_cpufreq_hw_init);
-
 
 static void __exit qcom_cpufreq_hw_exit(void)
 {
