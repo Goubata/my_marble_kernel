@@ -1196,16 +1196,6 @@ static int rpmh_regulator_vrm_set_voltage(struct regulator_dev *rdev,
 		return -EINVAL;
 	}
 
-	// ** pm8350c_s6_level の場合、50mV (50) 下げる **
-	if (strcmp(rdev->desc->name, "pm8350c_s6_level") == 0) {
-		mv -= 50; // 50mV アンダーボルト
-		// 限界を下回らないよう min/max チェック
-		if (mv * 1000 < rdev->constraints->min_uV)
-			mv = rdev->constraints->min_uV / 1000;
-		if (mv * 1000 > rdev->constraints->max_uV)
-			mv = rdev->constraints->max_uV / 1000;
-	}
-
 	mutex_lock(&vreg->aggr_vreg->lock);
 
 	prev_voltage
