@@ -2297,7 +2297,6 @@ static ssize_t uv_override_store(struct device *dev,
 				 const char *buf, size_t count)
 {
 	struct regulator_dev *rdev = dev_get_drvdata(dev);
-	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
 	int uv, rc;
 
 	if (kstrtoint(buf, 10, &uv))
@@ -2315,7 +2314,6 @@ static ssize_t uv_override_show(struct device *dev,
 				char *buf)
 {
 	struct regulator_dev *rdev = dev_get_drvdata(dev);
-	struct rpmh_vreg *vreg = rdev_get_drvdata(rdev);
 	int uv = rpmh_regulator_vrm_get_voltage(rdev);
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n", uv);
