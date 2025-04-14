@@ -1704,6 +1704,9 @@ done:
  *
  * Return: 0 on success, errno on failure
  */
+ 
+static void rpmh_add_uv_override_sysfs(struct rpmh_vreg *vreg);
+
 static int rpmh_regulator_allocate_vreg(struct rpmh_aggr_vreg *aggr_vreg)
 {
 	struct device_node *node;
@@ -2050,7 +2053,7 @@ static int rpmh_regulator_init_vreg(struct rpmh_vreg *vreg)
 		return rc;
 	}
 	
-rpmh_add_uv_override_sysfs(&aggr_vreg->vreg[i]);
+rpmh_add_uv_override_sysfs(vreg); // vreg はその場で使ってる構造体
 
 	rc = devm_regulator_proxy_consumer_register(dev, vreg->of_node);
 	if (rc)
