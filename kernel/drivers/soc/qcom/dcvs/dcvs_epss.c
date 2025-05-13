@@ -89,8 +89,7 @@ int populate_l3_table(struct device *dev, u32 **freq_table)
 	// 最大値 +268MHz の OC 周波数を追加
 	if (idx < MAX_L3_ENTRIES) {
 		tmp_l3_table[idx] = prev_freq / 1000UL + 268800;
-		printk(KERN_INFO "L3 OC: Added OC Freq = %lu kHz at idx=%d\n", tmp_l3_table[idx], idx);
-		idx++;
+		
 	}
 
 	len = idx;
@@ -119,8 +118,7 @@ static int commit_epss_l3(struct dcvs_path *path, struct dcvs_freq *freqs,
 	// OC のために最大周波数を選択
 	idx = hw->table_len - 1;
 
-	printk(KERN_INFO "L3 OC: Applying OC Freq = %u kHz (Index = %u)\n",
-			hw->freq_table[idx], idx);
+	
 
 	if (hw->type == DCVS_L3) {
 		if (shared)
