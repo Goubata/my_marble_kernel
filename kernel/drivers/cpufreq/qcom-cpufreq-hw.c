@@ -508,7 +508,7 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 #ifdef CONFIG_MACH_XIAOMI_MARBLE
 	if (ukee_overclock) {
 		if (cpu == 0) {
-			c->table[i++].frequency = 1800000;
+			c->table[i++].frequency = 1804000;
 		} else if (cpu == 4) {
 			c->table[i++].frequency = 2500000;
 		} else if (cpu == 7) {
